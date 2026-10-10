@@ -21,7 +21,8 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
+  /* The window is transparent: only the Winamp windows and the library are drawn. */
+  background: transparent;
   color: var(--text);
   font: 11px var(--font);
   overflow: hidden;
@@ -44,59 +45,38 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* ---- Title bar (the window is frameless) ---- */
-#titlebar {
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 0 10px;
-  background: linear-gradient(90deg, #14142a, #2d2d55 50%, #14142a);
-  border-bottom: 1px solid var(--bevel-dark);
-  -webkit-app-region: drag;
-}
-#titlebar .title {
-  font: bold 10px var(--font);
-  letter-spacing: 3px;
-  color: var(--accent);
-}
-#titlebar .actions {
-  display: flex;
-  gap: 4px;
-  -webkit-app-region: no-drag;
-}
-#titlebar .wnd {
-  width: 22px;
-  padding: 0;
-}
-
-/* ---- Layout ---- */
-#layout {
-  display: flex;
-  height: calc(100% - 24px);
-}
-#stage {
-  flex: 1;
-  position: relative;
-  min-width: 300px;
-  background: radial-gradient(circle at 50% 40%, #151530, #000 70%);
-}
-
 /* ---- Media Library window ---- */
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
 #library {
-  width: 46%;
-  min-width: 380px;
+  position: fixed;
+  left: calc(100% - 600px);
+  top: 60px;
+  width: 560px;
+  height: 640px;
+  min-width: 420px;
+  min-height: 360px;
+  resize: both;
+  overflow: hidden;
+  z-index: 20;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  border: 2px solid var(--bevel-light);
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border-left: 2px solid var(--bevel-light);
-  box-shadow: inset 1px 0 0 var(--bevel-dark);
 }
 #library.hidden {
   display: none;
 }
 .ml-titlebar {
-  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+  padding: 3px 4px 3px 8px;
   font: bold 9px var(--font);
   letter-spacing: 2px;
   color: var(--accent);
@@ -376,4 +356,15 @@ button:disabled {
 }
 .ml-collection-text .sub {
   color: var(--text-dim);
+}
+
+.ml-titlebar-actions {
+  display: flex;
+  gap: 3px;
+  letter-spacing: 0;
+}
+.ml-titlebar-actions button {
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: normal;
 }

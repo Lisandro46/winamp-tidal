@@ -1,5 +1,11 @@
 import type { AuthInfo, Collection, EqStatus, PlaybackState, SearchResults, Track } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
+import { makeFloating } from './desktop'
+
+export interface SkinActions {
+  pick(): void
+  reset(): void
+}
 
 type Section = 'mixes' | 'playlists' | 'albums' | 'artists'
 
@@ -58,9 +64,27 @@ export class LibraryPanel {
 
   constructor(
     root: HTMLElement,
-    private readonly controller: RemoteController
+    private readonly controller: RemoteController,
+    skins: SkinActions
   ) {
-    root.append(el('div', { className: 'ml-titlebar' }, 'WINAMP MEDIA LIBRARY · TIDAL'), this.status, this.body, this.nowPlaying)
+    const titlebar = el(
+      'div',
+      { className: 'ml-titlebar', title: 'Arrastrá para mover · L o el botón eject para mostrar/ocultar' },
+      el('span', {}, 'WINAMP MEDIA LIBRARY · TIDAL'),
+      el(
+        'div',
+        { className: 'ml-titlebar-actions' },
+        el('button', { textContent: 'Skin…', title: 'Cargar un skin .wsz', onclick: () => skins.pick() }),
+        el('button', { textContent: 'Skin base', title: 'Volver al skin clásico', onclick: () => skins.reset() }),
+        el('button', {
+          textContent: '×',
+          title: 'Ocultar (L)',
+          onclick: () => root.classList.add('hidden')
+        })
+      )
+    )
+    root.append(titlebar, this.status, this.body, this.nowPlaying)
+    makeFloating(root, titlebar, 'library-position')
     this.body.append(
       el('div', { className: 'ml-side' }, this.search, this.nav),
       el(

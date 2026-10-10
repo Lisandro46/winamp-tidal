@@ -1,25 +1,43 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { registerIpc } from './ipc'
 import { smtc } from './smtc/helperClient'
 
+/**
+ * The app is a transparent, frameless window covering the desktop's work area.
+ * Only the Winamp windows and the Media Library are drawn; everywhere else the
+ * mouse passes through to whatever is behind, so they float like real Winamp.
+ */
 function createWindow(): void {
+  const { workArea } = screen.getPrimaryDisplay()
   const window = new BrowserWindow({
-    width: 1100,
-    height: 720,
-    minWidth: 800,
-    minHeight: 500,
+    ...workArea,
     frame: false,
-    backgroundColor: '#000000',
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     title: 'Winamp Remote',
-    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      // The visualizer's (silent) AudioContext must run without a click first.
+      // The visualizer's AudioContext must run without a click first.
       autoplayPolicy: 'no-user-gesture-required'
     }
+  })
+  window.setIgnoreMouseEvents(true, { forward: true })
+
+  // The renderer reports whether the pointer is over a Winamp window or the library.
+  ipcMain.on('window:interactive', (_event, interactive: boolean) => {
+    if (!window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
+  })
+
+  // Keep covering the work area if the taskbar or resolution changes.
+  screen.on('display-metrics-changed', () => {
+    if (!window.isDestroyed()) window.setBounds(screen.getPrimaryDisplay().workArea)
   })
 
   // Links inside the UI open in the system browser, never inside the app.

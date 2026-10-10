@@ -2,7 +2,8 @@ import Webamp from 'webamp'
 import './styles/app.css'
 import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
-import { LibraryPanel } from './ui/LibraryPanel'
+import { LibraryPanel, type SkinActions } from './ui/LibraryPanel'
+import { trackPointer } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
 
@@ -14,13 +15,8 @@ function showToast(message: string): void {
   toast.dataset.timer = String(setTimeout(() => toast.classList.remove('visible'), 6000))
 }
 
-function setupTitlebar(webamp: Webamp): void {
-  $('#btn-minimize').onclick = () => window.remote.windowControl('minimize')
-  $('#btn-close').onclick = () => window.remote.windowControl('close')
-  $('#btn-library').onclick = () => document.dispatchEvent(new CustomEvent('library:toggle'))
-
+function skinActions(webamp: Webamp): SkinActions {
   const fileInput = $<HTMLInputElement>('#skin-file')
-  $('#btn-skin').onclick = () => fileInput.click()
   fileInput.onchange = () => {
     const file = fileInput.files?.[0]
     if (!file) return
@@ -33,9 +29,12 @@ function setupTitlebar(webamp: Webamp): void {
     reader.readAsDataURL(file)
     fileInput.value = ''
   }
-  $('#btn-skin-reset').onclick = () => {
-    void window.remote.setSkin(undefined)
-    location.reload()
+  return {
+    pick: () => fileInput.click(),
+    reset: () => {
+      void window.remote.setSkin(undefined)
+      location.reload()
+    }
   }
 }
 
@@ -67,11 +66,11 @@ async function main(): Promise<void> {
   window.remote.onPcm((chunk) => getRemoteMedia()?.feedPcm(chunk))
   window.remote.onError((message) => showToast(message))
 
-  setupTitlebar(webamp)
+  trackPointer()
   await webamp.renderInto($('#stage'))
   controller.restoreEq(settings.eq)
 
-  library = new LibraryPanel($('#library'), controller)
+  library = new LibraryPanel($('#library'), controller, skinActions(webamp))
   await library.init()
   await window.remote.ready()
 }

@@ -120,4 +120,6 @@ export interface RemoteApi {
   onError(callback: (message: string) => void): () => void
 
   windowControl(action: 'minimize' | 'close'): void
+  /** Whether the pointer is over UI (clicks handled) or empty space (clicks pass through). */
+  setInteractive(interactive: boolean): void
 }

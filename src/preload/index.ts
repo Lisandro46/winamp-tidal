@@ -48,7 +48,8 @@ const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'l
 const api = {
   ...Object.fromEntries(methods.map((name) => [name, invoke(name)])),
   ...Object.fromEntries(Object.entries(events).map(([name, channel]) => [name, subscribe(channel)])),
-  windowControl: (action: 'minimize' | 'close') => ipcRenderer.send('window:control', action)
+  windowControl: (action: 'minimize' | 'close') => ipcRenderer.send('window:control', action),
+  setInteractive: (interactive: boolean) => ipcRenderer.send('window:interactive', interactive)
 } as unknown as RemoteApi
 
 contextBridge.exposeInMainWorld('remote', api)

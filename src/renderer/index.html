@@ -9,21 +9,9 @@
     <title>Winamp Remote</title>
   </head>
   <body>
-    <header id="titlebar">
-      <span class="title">WINAMP REMOTE</span>
-      <div class="actions">
-        <button id="btn-library" title="Mostrar/ocultar Media Library (L)">Library</button>
-        <button id="btn-skin" title="Cargar un skin .wsz">Skin…</button>
-        <button id="btn-skin-reset" title="Volver al skin clásico">Skin base</button>
-        <input id="skin-file" type="file" accept=".wsz,.zip" hidden />
-        <button id="btn-minimize" class="wnd" title="Minimizar">_</button>
-        <button id="btn-close" class="wnd" title="Cerrar">×</button>
-      </div>
-    </header>
-    <main id="layout">
-      <div id="stage"></div>
-      <aside id="library"></aside>
-    </main>
+    <div id="stage"></div>
+    <aside id="library"></aside>
+    <input id="skin-file" type="file" accept=".wsz,.zip" hidden />
     <div id="toast" role="status"></div>
     <script type="module" src="./main.ts"></script>
   </body>
