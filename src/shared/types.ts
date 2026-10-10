@@ -76,6 +76,23 @@ export interface AuthInfo {
 export interface AppSettings {
   skinUrl?: string
   eq?: EqState
+  /** Zoom factor for the whole UI. */
+  scale?: number
+  /** The first-run TIDAL setup was answered (catalog or remote-only). */
+  setupDone?: boolean
+}
+
+/** The user's own TIDAL developer app (developer.tidal.com). */
+export interface TidalCredentials {
+  clientId: string
+  clientSecret: string
+}
+
+export interface CredentialsInfo {
+  clientId: string
+  hasSecret: boolean
+  /** Saved from the setup dialog, baked into the build from .env, or none. */
+  source: 'saved' | 'build' | 'none'
 }
 
 export interface Rect {
@@ -89,6 +106,7 @@ export interface Rect {
 export interface DesktopLayout {
   primary: Rect
   displays: Rect[]
+  scale: number
 }
 
 export interface PcmChunk {
@@ -102,6 +120,9 @@ export interface RemoteApi {
   getAuth(): Promise<AuthInfo>
   connect(): Promise<AuthInfo>
   disconnect(): Promise<AuthInfo>
+  getCredentials(): Promise<CredentialsInfo>
+  /** Checks and saves the user's TIDAL app, or `null` for remote-only use. Ends the first-run setup. */
+  setCredentials(credentials: TidalCredentials | null): Promise<AuthInfo>
   getSettings(): Promise<AppSettings>
   setSkin(url: string | undefined): Promise<void>
 
@@ -139,6 +160,7 @@ export interface RemoteApi {
   windowControl(action: 'minimize' | 'close'): void
   /** Whether the pointer is over UI (clicks handled) or empty space (clicks pass through). */
   setInteractive(interactive: boolean): void
+  scaleWindow(direction: 'in' | 'out' | 'reset'): void
   getLayout(): Promise<DesktopLayout>
   onLayout(callback: (layout: DesktopLayout) => void): () => void
 }

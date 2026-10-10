@@ -160,21 +160,14 @@ export class SearchDialog {
 
     if (!this.catalog) {
       this.crumb.textContent = ''
-      const connect = el('button', {
-        textContent: 'Conectar TIDAL',
-        onclick: async () => {
-          try {
-            const auth = await window.remote.connect()
-            this.connected = auth.connected
-            this.catalog = auth.catalog
-          } catch {
-            return
-          }
-          document.dispatchEvent(new CustomEvent('auth:changed'))
-          void this.show()
+      const setup = el('button', {
+        textContent: 'Activar búsqueda…',
+        onclick: () => {
+          this.close()
+          document.dispatchEvent(new CustomEvent('setup:open'))
         }
       })
-      this.message('Conectá TIDAL para buscar y elegir música. ', el('br'), el('br'), connect)
+      this.message('Para buscar y elegir música de TIDAL desde acá, activá el modo catálogo. ', el('br'), el('br'), setup)
       return
     }
 

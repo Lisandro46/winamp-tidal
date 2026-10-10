@@ -1,11 +1,14 @@
-import type { Collection, SearchResults, Track } from '@shared/types'
+import type { Collection, CredentialsInfo, SearchResults, TidalCredentials, Track } from '@shared/types'
 import { app } from 'electron'
 import { ApiError, ClientCredentialsSession, OAuthSession } from '../auth/session'
+import { credentialStore } from '../auth/store'
 
 const API = 'https://openapi.tidal.com/v2'
-const CLIENT_ID = import.meta.env.MAIN_VITE_TIDAL_CLIENT_ID ?? ''
-/** Optional: enables catalog mode (search, albums, artists) without a user login. */
-const CLIENT_SECRET = import.meta.env.MAIN_VITE_TIDAL_CLIENT_SECRET ?? ''
+/** Developer builds can bake an app in from .env; installers use the one saved in the setup dialog. */
+const BUILD_CREDENTIALS: TidalCredentials = {
+  clientId: import.meta.env.MAIN_VITE_TIDAL_CLIENT_ID ?? '',
+  clientSecret: import.meta.env.MAIN_VITE_TIDAL_CLIENT_SECRET ?? ''
+}
 const TOKEN_URL = 'https://auth.tidal.com/v1/oauth2/token'
 const MAX_PAGES = 15
 /** TIDAL allows up to 20 ids per filtered request. */
@@ -28,7 +31,7 @@ interface Document {
 }
 
 const NEEDS_LOGIN = 'Tu biblioteca necesita el login de TIDAL (pendiente de que TIDAL habilite la app)'
-const NEEDS_CATALOG = 'Falta MAIN_VITE_TIDAL_CLIENT_SECRET en .env para buscar en el catálogo sin login'
+const NEEDS_CATALOG = 'Para buscar en TIDAL activá el modo catálogo con el botón "TIDAL…" de la Media Library'
 
 /** "PT3M25S" → 205000 */
 export function isoDurationToMs(duration: unknown): number {
@@ -74,10 +77,11 @@ class Included {
 
 /** TIDAL API v2 (JSON:API) client for the user's library. */
 export class TidalApi {
+  private credentials = credentialStore.get() ?? BUILD_CREDENTIALS
   private session = new OAuthSession('tidal', () => ({
     authorizeUrl: 'https://login.tidal.com/authorize',
     tokenUrl: 'https://auth.tidal.com/v1/oauth2/token',
-    clientId: CLIENT_ID,
+    clientId: this.credentials.clientId,
     scopes: [
       'user.read',
       'collection.read',
@@ -90,12 +94,45 @@ export class TidalApi {
     // TIDAL rejects localhost/http redirects; this page forwards to 127.0.0.1:8889.
     redirectUri: 'https://lisandro46.github.io/winamp-remote-callback/'
   }))
-  private catalog = new ClientCredentialsSession(TOKEN_URL, CLIENT_ID, CLIENT_SECRET)
+  private catalog = this.catalogSession(this.credentials)
   private countryCode: string | undefined
   private trackCache = new Map<string, Track>()
 
+  private catalogSession({ clientId, clientSecret }: TidalCredentials): ClientCredentialsSession {
+    return new ClientCredentialsSession(TOKEN_URL, clientId, clientSecret)
+  }
+
   get configured(): boolean {
-    return CLIENT_ID !== ''
+    return this.credentials.clientId !== ''
+  }
+
+  credentialsInfo(): CredentialsInfo {
+    const { clientId, clientSecret } = this.credentials
+    const source = credentialStore.get() ? 'saved' : BUILD_CREDENTIALS.clientId ? 'build' : 'none'
+    return { clientId, hasSecret: clientSecret !== '', source }
+  }
+
+  /**
+   * Switches to the user's own TIDAL app after checking it with TIDAL, or back to
+   * the build's (usually none) with `null`. A login made with another app is dropped.
+   */
+  async setCredentials(credentials: TidalCredentials | null): Promise<void> {
+    const next = credentials
+      ? { clientId: credentials.clientId.trim(), clientSecret: credentials.clientSecret.trim() }
+      : BUILD_CREDENTIALS
+    const catalog = this.catalogSession(next)
+    if (credentials) {
+      if (!catalog.configured) throw new ApiError('Pegá el Client ID y el Client Secret de tu app de TIDAL')
+      try {
+        await catalog.check()
+      } catch {
+        throw new ApiError('TIDAL no aceptó ese Client ID / Client Secret. Revisá que estén bien copiados.')
+      }
+    }
+    credentialStore.set(credentials ? next : undefined)
+    if (next.clientId !== this.credentials.clientId) this.logout()
+    this.credentials = next
+    this.catalog = catalog
   }
   get connected(): boolean {
     return this.session.isLoggedIn()

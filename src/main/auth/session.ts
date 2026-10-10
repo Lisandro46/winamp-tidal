@@ -116,6 +116,11 @@ export class ClientCredentialsSession {
     return this.clientId !== '' && this.clientSecret !== ''
   }
 
+  /** Rejects if TIDAL doesn't accept the client id/secret. */
+  async check(): Promise<void> {
+    await this.fetchToken()
+  }
+
   private async fetchToken(): Promise<string> {
     const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')
     const response = await fetch(this.tokenUrl, {

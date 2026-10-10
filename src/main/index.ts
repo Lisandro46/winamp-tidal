@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, screen, shell, type Rectangle } from 'electron'
 import type { DesktopLayout } from '@shared/types'
+import { settingsStore } from './auth/store'
 import { registerIpc } from './ipc'
 import { smtc } from './smtc/helperClient'
 
@@ -14,14 +15,36 @@ function desktopBounds(): Rectangle {
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
-/** Primary monitor's work area relative to the window, so the UI starts there. */
+/** Zoom steps for the whole UI (Winamp windows and panels). */
+const SCALES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
+
+const currentScale = (): number => settingsStore.get().scale ?? 1
+
+/**
+ * Primary monitor's work area relative to the window, so the UI starts there.
+ * In CSS pixels: the page is zoomed by the UI scale, so screen pixels are divided by it.
+ */
 function layout(): DesktopLayout {
   const bounds = desktopBounds()
-  const { workArea } = screen.getPrimaryDisplay()
+  const scale = currentScale()
+  const toCss = (a: Rectangle): Rectangle => ({
+    x: (a.x - bounds.x) / scale,
+    y: (a.y - bounds.y) / scale,
+    width: a.width / scale,
+    height: a.height / scale
+  })
   return {
-    primary: { ...workArea, x: workArea.x - bounds.x, y: workArea.y - bounds.y },
-    displays: screen.getAllDisplays().map(({ workArea: a }) => ({ ...a, x: a.x - bounds.x, y: a.y - bounds.y }))
+    primary: toCss(screen.getPrimaryDisplay().workArea),
+    displays: screen.getAllDisplays().map((d) => toCss(d.workArea)),
+    scale
   }
+}
+
+function nextScale(direction: 'in' | 'out' | 'reset'): number {
+  if (direction === 'reset') return 1
+  const scale = currentScale()
+  if (direction === 'in') return SCALES.find((s) => s > scale + 0.001) ?? SCALES[SCALES.length - 1]
+  return [...SCALES].reverse().find((s) => s < scale - 0.001) ?? SCALES[0]
 }
 
 /**
@@ -66,6 +89,26 @@ function createWindow(): void {
   screen.on('display-metrics-changed', refit)
   screen.on('display-added', refit)
   screen.on('display-removed', refit)
+
+  // UI size: Ctrl +/-/0, Ctrl+wheel or the Media Library buttons zoom the whole page.
+  const applyScale = (): void => window.webContents.setZoomFactor(currentScale())
+  window.webContents.on('did-finish-load', applyScale)
+  const rescale = (direction: 'in' | 'out' | 'reset'): void => {
+    settingsStore.update({ scale: nextScale(direction) })
+    applyScale()
+    refit()
+  }
+  ipcMain.on('window:scale', (_event, direction: 'in' | 'out' | 'reset') => rescale(direction))
+  window.webContents.on('zoom-changed', (_event, direction) => rescale(direction))
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !input.control || input.alt) return
+    const keys: Record<string, 'in' | 'out' | 'reset'> = { '+': 'in', '=': 'in', '-': 'out', '0': 'reset' }
+    const direction = keys[input.key]
+    if (!direction) return
+    // Also stops the default menu's own zoom accelerators.
+    event.preventDefault()
+    rescale(direction)
+  })
 
   // Links inside the UI open in the system browser, never inside the app.
   window.webContents.setWindowOpenHandler(({ url }) => {

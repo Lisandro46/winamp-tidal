@@ -6,7 +6,7 @@
 import type { DesktopLayout, Rect } from '@shared/types'
 
 /** UI that should receive the mouse; everything else is click-through. */
-const INTERACTIVE = '#webamp, #library:not(.hidden), #tidal-search:not(.hidden), [id^="webamp-"]'
+const INTERACTIVE = '#webamp, #library:not(.hidden), #tidal-search:not(.hidden), #tidal-setup:not(.hidden), [id^="webamp-"]'
 
 export function trackPointer(): void {
   let interactive: boolean | undefined
@@ -164,7 +164,7 @@ interface WebampWindows {
  * Same as keepOnScreen, for the Winamp windows: after a drag ends, any window
  * whose title bar landed outside every monitor is pulled back onto the nearest one.
  */
-export function keepWebampOnScreen(webamp: WebampWindows): void {
+export function keepWebampOnScreen(webamp: WebampWindows): () => void {
   const check = (): void => {
     const windows = webamp.store.getState().windows.genWindows
     const positions: Record<string, { x: number; y: number }> = {}
@@ -185,6 +185,7 @@ export function keepWebampOnScreen(webamp: WebampWindows): void {
   }
   // Let Webamp finish its own drag handling first.
   window.addEventListener('mouseup', () => setTimeout(check, 0))
+  return check
 }
 
 /** Monitors were added, removed or rearranged while running. */

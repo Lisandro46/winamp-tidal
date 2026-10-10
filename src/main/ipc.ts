@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { AuthInfo, Collection, EqState, PlayContext, Track } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext, TidalCredentials, Track } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { Equalizer } from './audio/equalizer'
 import { smtc } from './smtc/helperClient'
@@ -19,7 +19,7 @@ export function registerIpc(window: BrowserWindow): () => void {
     configured: api.configured,
     connected: api.connected,
     catalog: api.catalogAvailable,
-    hint: api.configured ? undefined : 'Falta MAIN_VITE_TIDAL_CLIENT_ID en .env (ver README)'
+    hint: api.configured ? undefined : 'Solo control remoto'
   })
 
   // Every handler reports failures to the UI as well as rejecting the call.
@@ -56,6 +56,13 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('disconnect', async () => {
     api.logout()
     await player.loadLiked()
+    return auth()
+  })
+  handle('getCredentials', () => api.credentialsInfo())
+  handle('setCredentials', async (credentials: TidalCredentials | null) => {
+    await api.setCredentials(credentials)
+    settingsStore.update({ setupDone: true })
+    await player.loadLiked().catch(() => undefined)
     return auth()
   })
   handle('getSettings', () => settingsStore.get())

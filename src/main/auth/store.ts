@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, safeStorage } from 'electron'
-import type { AppSettings } from '@shared/types'
+import type { AppSettings, TidalCredentials } from '@shared/types'
 import type { TokenSet } from './oauthPkce'
 
 const dir = (): string => {
@@ -20,26 +20,42 @@ function readJson<T>(file: string, fallback: T): T {
   }
 }
 
-/** Tokens are encrypted with the OS keychain (DPAPI on Windows) via safeStorage. */
-export const tokenStore = {
-  get(provider: string): TokenSet | undefined {
-    const path = join(dir(), `tokens-${provider}.bin`)
-    if (!existsSync(path) || !safeStorage.isEncryptionAvailable()) return undefined
-    try {
-      return JSON.parse(safeStorage.decryptString(readFileSync(path))) as TokenSet
-    } catch {
-      return undefined
-    }
-  },
-  set(provider: string, tokens: TokenSet | undefined): void {
-    const path = join(dir(), `tokens-${provider}.bin`)
-    if (!tokens) {
-      writeFileSync(path, '')
-      return
-    }
-    if (!safeStorage.isEncryptionAvailable()) return
-    writeFileSync(path, safeStorage.encryptString(JSON.stringify(tokens)))
+/** Secrets are encrypted with the OS keychain (DPAPI on Windows) via safeStorage. */
+function readEncrypted<T>(file: string): T | undefined {
+  const path = join(dir(), file)
+  if (!existsSync(path) || !safeStorage.isEncryptionAvailable()) return undefined
+  try {
+    return JSON.parse(safeStorage.decryptString(readFileSync(path))) as T
+  } catch {
+    return undefined
   }
+}
+
+function writeEncrypted(file: string, value: unknown): void {
+  const path = join(dir(), file)
+  if (value === undefined) {
+    writeFileSync(path, '')
+    return
+  }
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows no permite cifrar datos en esta cuenta')
+  writeFileSync(path, safeStorage.encryptString(JSON.stringify(value)))
+}
+
+export const tokenStore = {
+  get: (provider: string): TokenSet | undefined => readEncrypted<TokenSet>(`tokens-${provider}.bin`),
+  set(provider: string, tokens: TokenSet | undefined): void {
+    try {
+      writeEncrypted(`tokens-${provider}.bin`, tokens)
+    } catch {
+      // without encryption the session just isn't remembered
+    }
+  }
+}
+
+/** The user's own TIDAL app, entered in the setup dialog. */
+export const credentialStore = {
+  get: (): TidalCredentials | undefined => readEncrypted<TidalCredentials>('tidal-app.bin'),
+  set: (credentials: TidalCredentials | undefined): void => writeEncrypted('tidal-app.bin', credentials)
 }
 
 const DEFAULT_SETTINGS: AppSettings = {}

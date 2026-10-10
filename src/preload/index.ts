@@ -20,6 +20,8 @@ const methods = [
   'getAuth',
   'connect',
   'disconnect',
+  'getCredentials',
+  'setCredentials',
   'getSettings',
   'setSkin',
   'getLikedTracks',
@@ -51,6 +53,7 @@ const api = {
   ...Object.fromEntries(Object.entries(events).map(([name, channel]) => [name, subscribe(channel)])),
   windowControl: (action: 'minimize' | 'close') => ipcRenderer.send('window:control', action),
   setInteractive: (interactive: boolean) => ipcRenderer.send('window:interactive', interactive),
+  scaleWindow: (direction: 'in' | 'out' | 'reset') => ipcRenderer.send('window:scale', direction),
   getLayout: () => ipcRenderer.invoke('window:layout'),
   onLayout: (callback: (layout: unknown) => void) => {
     const listener = (_event: IpcRendererEvent, layout: unknown): void => callback(layout)

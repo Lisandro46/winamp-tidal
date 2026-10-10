@@ -4,8 +4,9 @@ import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
 import { LibraryPanel, type SkinActions } from './ui/LibraryPanel'
 import { SearchDialog } from './ui/SearchDialog'
+import { SetupDialog } from './ui/SetupDialog'
 import { favorites } from './ui/library'
-import { keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
+import { keepOnScreen, keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
 
@@ -72,8 +73,17 @@ async function main(): Promise<void> {
   // The window spans every monitor; start the UI on the primary one.
   const layout = await window.remote.getLayout()
   placeOnPrimary($('#stage'), $('#library'), layout)
-  keepWebampOnScreen(webamp as unknown as Parameters<typeof keepWebampOnScreen>[0])
-  window.remote.onLayout((next) => updateLayout($('#stage'), $('#library'), next))
+  const recheckWebamp = keepWebampOnScreen(webamp as unknown as Parameters<typeof keepWebampOnScreen>[0])
+  let scale = layout.scale
+  window.remote.onLayout((next) => {
+    updateLayout($('#stage'), $('#library'), next)
+    keepOnScreen($('#tidal-search'))
+    keepOnScreen($('#tidal-setup'))
+    // After a zoom change windows may have grown past the screen edge.
+    requestAnimationFrame(recheckWebamp)
+    if (next.scale !== scale) showToast(`Tamaño ${Math.round(next.scale * 100)}%`)
+    scale = next.scale
+  })
   // Centered over the primary monitor's #stage but bounded by the whole window,
   // so the Winamp windows can be dragged onto any monitor.
   await webamp.renderWhenReady($('#stage'))
@@ -81,9 +91,12 @@ async function main(): Promise<void> {
 
   library = new LibraryPanel($('#library'), controller, skinActions(webamp))
   new SearchDialog($('#tidal-search'), controller)
+  const setup = new SetupDialog($('#tidal-setup'))
   window.remote.onLiked((ids) => favorites.set(ids))
   await library.init()
   await window.remote.ready()
+  // First run of an installer (no TIDAL app baked in): ask how it will be used.
+  if (!settings.setupDone && !(await window.remote.getAuth()).configured) void setup.open()
 }
 
 void main()

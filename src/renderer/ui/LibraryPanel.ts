@@ -49,8 +49,15 @@ export class LibraryPanel {
       el(
         'div',
         { className: 'ml-titlebar-actions' },
+        el('button', {
+          textContent: 'TIDAL…',
+          title: 'Solo control remoto, o buscar en TIDAL (modo catálogo)',
+          onclick: () => document.dispatchEvent(new CustomEvent('setup:open'))
+        }),
         el('button', { textContent: 'Skin…', title: 'Cargar un skin .wsz', onclick: () => skins.pick() }),
         el('button', { textContent: 'Skin base', title: 'Volver al skin clásico', onclick: () => skins.reset() }),
+        el('button', { textContent: 'A−', title: 'Achicar todo (Ctrl −)', onclick: () => window.remote.scaleWindow('out') }),
+        el('button', { textContent: 'A+', title: 'Agrandar todo (Ctrl +) · Ctrl 0 vuelve a 100%', onclick: () => window.remote.scaleWindow('in') }),
         el('button', { textContent: '×', title: 'Ocultar (L)', onclick: () => root.classList.add('hidden') })
       )
     )
@@ -105,7 +112,13 @@ export class LibraryPanel {
   private renderStatus(): void {
     const tidal: (Node | string)[] = []
     if (!this.auth.configured) {
-      tidal.push(el('span', { className: 'ml-warn' }, `⚠ ${this.auth.hint ?? 'TIDAL sin configurar'}`))
+      tidal.push(
+        el('span', { className: 'ml-ok' }, `● ${this.auth.hint ?? 'Solo control remoto'}`),
+        el('button', {
+          textContent: 'Buscar en TIDAL…',
+          onclick: () => document.dispatchEvent(new CustomEvent('setup:open'))
+        })
+      )
     } else if (this.auth.connected) {
       tidal.push(
         el('span', { className: 'ml-ok' }, '● TIDAL conectado'),
@@ -190,7 +203,7 @@ export class LibraryPanel {
         'div',
         { className: 'ml-empty' },
         !this.auth.configured
-          ? 'Configurá el client id de TIDAL en .env (ver README). Los controles del Winamp ya funcionan.'
+          ? 'Modo solo control remoto: elegí la música en la app de TIDAL y manejala desde el Winamp. Para buscar en TIDAL desde acá tocá "TIDAL…" arriba.'
           : this.auth.catalog
             ? 'Modo catálogo: buscá arriba (o con "+ Agregar desde TIDAL") cualquier tema, disco, artista o playlist pública y reproducilo o sumalo a la playlist. Tus favoritos, mixes y playlists aparecen cuando TIDAL habilite el login de la app.'
             : 'Tocá "Conectar TIDAL" arriba para ver tu biblioteca. Los controles del Winamp ya funcionan sin conectar.'

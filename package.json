@@ -1,7 +1,7 @@
 {
   "name": "winamp-tidal",
-  "version": "0.1.0",
-  "description": "Winamp skin (Webamp) that remote-controls the TIDAL desktop app",
+  "version": "1.0.0",
+  "description": "Winamp 2 (Webamp) como control remoto de la app de escritorio de TIDAL",
   "main": "out/main/index.js",
   "author": "Lisandro Arrigoni",
   "license": "MIT",
@@ -12,11 +12,11 @@
     "build:helper": "dotnet build native/smtc-helper -c Release -o build/smtc-helper --nologo -v q",
     "publish:helper": "dotnet publish native/smtc-helper -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o build/smtc-helper --nologo -v q",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "dist": "npm run publish:helper && npm run build && electron-builder --win"
+    "dist": "npm run publish:helper && npm run build && electron-builder --win --publish never"
   },
   "build": {
     "appId": "com.lisandro.winamp-remote",
-    "productName": "Winamp Remote",
+    "productName": "Winamp Remote para TIDAL",
     "directories": {
       "output": "dist"
     },
@@ -34,11 +34,20 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Winamp-Remote-TIDAL-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Winamp-Remote-TIDAL-Portable-${version}.${ext}"
     }
   },
   "devDependencies": {
@@ -49,5 +58,10 @@
     "typescript": "^5.9.3",
     "vite": "^7.1.0",
     "webamp": "2.3.1"
+  },
+  "homepage": "https://github.com/Lisandro46/winamp-tidal",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lisandro46/winamp-tidal.git"
   }
 }
