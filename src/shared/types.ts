@@ -68,6 +68,8 @@ export interface EqStatus {
 export interface AuthInfo {
   configured: boolean
   connected: boolean
+  /** Search and catalog browsing work (user login, or the app's client credentials). */
+  catalog: boolean
   hint?: string
 }
 

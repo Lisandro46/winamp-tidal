@@ -36,7 +36,10 @@ Una skin de **Winamp 2 real** (archivos `.wsz`, vía [Webamp](https://github.com
    - Redirect URI: `https://lisandro46.github.io/winamp-remote-callback/`
      (TIDAL no acepta redirects `http`/`localhost`; esa página —repo público [winamp-remote-callback](https://github.com/Lisandro46/winamp-remote-callback)— reenvía el login a la app en `127.0.0.1:8889`. Es segura: el código no sirve sin el verificador PKCE, que nunca sale de tu PC)
    - Scopes: `user.read collection.read collection.write playlists.read search.read recommendations.read`
-2. Copiá `.env.example` a `.env` y poné tu client ID. Con PKCE no hace falta ningún secret.
+2. Copiá `.env.example` a `.env` y poné tu client ID. Con PKCE no hace falta ningún secret para el login.
+3. Opcional, **modo catálogo**: poné también `MAIN_VITE_TIDAL_CLIENT_SECRET`. Así podés buscar y reproducir cualquier tema, disco, artista o playlist pública sin iniciar sesión. El secret queda dentro de tu build, así que no compartas ese instalador.
+
+> **Login de usuario pendiente:** TIDAL aprueba a mano el login de usuarios para apps nuevas de terceros. Hasta entonces `/authorize` responde `11102`. Pedido de acceso: [tidal-music/discussions#415](https://github.com/orgs/tidal-music/discussions/415). Mientras tanto andan los controles, el volumen, el ecualizador, el visualizador y el modo catálogo.
 
 Sin client ID igual funcionan los controles, el volumen, el ecualizador y el visualizador. Solo falta la biblioteca.
 

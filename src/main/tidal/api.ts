@@ -1,8 +1,12 @@
 import type { Collection, SearchResults, Track } from '@shared/types'
-import { ApiError, OAuthSession } from '../auth/session'
+import { app } from 'electron'
+import { ApiError, ClientCredentialsSession, OAuthSession } from '../auth/session'
 
 const API = 'https://openapi.tidal.com/v2'
 const CLIENT_ID = import.meta.env.MAIN_VITE_TIDAL_CLIENT_ID ?? ''
+/** Optional: enables catalog mode (search, albums, artists) without a user login. */
+const CLIENT_SECRET = import.meta.env.MAIN_VITE_TIDAL_CLIENT_SECRET ?? ''
+const TOKEN_URL = 'https://auth.tidal.com/v1/oauth2/token'
 const MAX_PAGES = 15
 /** TIDAL allows up to 20 ids per filtered request. */
 const BATCH = 20
@@ -22,6 +26,9 @@ interface Document {
   included?: Resource[]
   links?: { next?: string }
 }
+
+const NEEDS_LOGIN = 'Tu biblioteca necesita el login de TIDAL (pendiente de que TIDAL habilite la app)'
+const NEEDS_CATALOG = 'Falta MAIN_VITE_TIDAL_CLIENT_SECRET en .env para buscar en el catálogo sin login'
 
 /** "PT3M25S" → 205000 */
 export function isoDurationToMs(duration: unknown): number {
@@ -83,6 +90,7 @@ export class TidalApi {
     // TIDAL rejects localhost/http redirects; this page forwards to 127.0.0.1:8889.
     redirectUri: 'https://lisandro46.github.io/winamp-remote-callback/'
   }))
+  private catalog = new ClientCredentialsSession(TOKEN_URL, CLIENT_ID, CLIENT_SECRET)
   private countryCode: string | undefined
   private trackCache = new Map<string, Track>()
 
@@ -92,7 +100,14 @@ export class TidalApi {
   get connected(): boolean {
     return this.session.isLoggedIn()
   }
-  login = (): Promise<void> => this.session.login()
+  /** Catalog requests (search, albums, artists, public playlists) work without a user. */
+  get catalogAvailable(): boolean {
+    return this.connected || this.catalog.configured
+  }
+  async login(): Promise<void> {
+    await this.session.login()
+    this.countryCode = undefined
+  }
   logout(): void {
     this.session.logout()
     this.countryCode = undefined
@@ -108,13 +123,23 @@ export class TidalApi {
     return url.toString()
   }
 
-  private get = (url: string): Promise<Document | undefined> =>
-    this.session.request<Document>(url, { headers: { Accept: 'application/vnd.api+json' } })
+  /** Uses the user's session when logged in, otherwise the app's catalog token. */
+  private get = (url: string): Promise<Document | undefined> => {
+    const init = { headers: { Accept: 'application/vnd.api+json' } }
+    if (this.connected) return this.session.request<Document>(url, init)
+    if (this.catalog.configured) return this.catalog.request<Document>(url, init)
+    throw new ApiError(NEEDS_LOGIN)
+  }
 
   private async country(): Promise<string> {
     if (!this.countryCode) {
-      const me = await this.get(this.url('/users/me'))
-      this.countryCode = String((me?.data as Resource | undefined)?.attributes?.country ?? 'US')
+      if (this.connected) {
+        const me = await this.get(this.url('/users/me'))
+        this.countryCode = String((me?.data as Resource | undefined)?.attributes?.country ?? 'US')
+      } else {
+        // No user yet: use Windows' region so the catalog matches what TIDAL offers there.
+        this.countryCode = app.getLocaleCountryCode() || 'US'
+      }
     }
     return this.countryCode
   }
@@ -301,7 +326,12 @@ export class TidalApi {
     )
   }
 
-  async ensureConnected(): Promise<void> {
-    if (!this.connected) throw new ApiError('Conectate a TIDAL para ver tu biblioteca')
+  /** Favorites, playlists, mixes… belong to a user and need a login. */
+  async ensureUser(): Promise<void> {
+    if (!this.connected) throw new ApiError(NEEDS_LOGIN)
+  }
+
+  async ensureCatalog(): Promise<void> {
+    if (!this.catalogAvailable) throw new ApiError(NEEDS_CATALOG)
   }
 }

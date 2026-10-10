@@ -18,6 +18,7 @@ export function registerIpc(window: BrowserWindow): () => void {
   const auth = (): AuthInfo => ({
     configured: api.configured,
     connected: api.connected,
+    catalog: api.catalogAvailable,
     hint: api.configured ? undefined : 'Falta MAIN_VITE_TIDAL_CLIENT_ID en .env (ver README)'
   })
 
@@ -32,10 +33,17 @@ export function registerIpc(window: BrowserWindow): () => void {
       }
     })
   }
+  // User library calls need a login; catalog calls also work with the app token.
   const library =
     <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
-      await api.ensureConnected()
+      await api.ensureUser()
+      return fn(...args)
+    }
+  const catalog =
+    <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      await api.ensureCatalog()
       return fn(...args)
     }
 
@@ -60,8 +68,8 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('getMixes', library(() => api.mixes()))
   handle('getAlbums', library(() => api.userAlbums()))
   handle('getArtists', library(() => api.userArtists()))
-  handle('getTracks', library((collection: Collection) => api.collectionTracks(collection)))
-  handle('search', library((query: string) => api.search(query)))
+  handle('getTracks', catalog((collection: Collection) => api.collectionTracks(collection)))
+  handle('search', catalog((query: string) => api.search(query)))
   handle('setLiked', library((id: string, liked: boolean) => player.setLiked(id, liked)))
   handle('getLikedIds', () => player.likedIds())
 

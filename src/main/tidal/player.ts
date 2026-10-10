@@ -113,7 +113,7 @@ export class TidalPlayer {
     const queued = this.queue.find((t) => sameTrack(session, t))
     if (queued) return queued
     const key = sessionKey(session)
-    if (!this.resolved.has(key) && this.api.connected) {
+    if (!this.resolved.has(key) && this.api.catalogAvailable) {
       this.resolved.set(key, null)
       this.api
         .findTrack(session.title, session.artist)

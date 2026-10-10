@@ -32,6 +32,8 @@ export class SearchDialog {
   private history: View[] = [{ kind: 'home' }]
   private filter: Filter = 'all'
   private connected = false
+  /** Search and catalog browsing available (login or catalog mode). */
+  private catalog = false
   private loadToken = 0
   private searchTimer: ReturnType<typeof setTimeout> | undefined
   private lastResults: SearchResults | undefined
@@ -85,7 +87,9 @@ export class SearchDialog {
     keepOnScreen(this.root)
     this.input.focus()
     this.input.select()
-    this.connected = (await window.remote.getAuth()).connected
+    const auth = await window.remote.getAuth()
+    this.connected = auth.connected
+    this.catalog = auth.catalog
     if (this.history.length === 1) void this.show()
   }
 
@@ -154,13 +158,15 @@ export class SearchDialog {
     this.actions.replaceChildren()
     this.filters.hidden = view.kind !== 'search'
 
-    if (!this.connected) {
+    if (!this.catalog) {
       this.crumb.textContent = ''
       const connect = el('button', {
         textContent: 'Conectar TIDAL',
         onclick: async () => {
           try {
-            this.connected = (await window.remote.connect()).connected
+            const auth = await window.remote.connect()
+            this.connected = auth.connected
+            this.catalog = auth.catalog
           } catch {
             return
           }
@@ -208,6 +214,17 @@ export class SearchDialog {
   private renderHome(): void {
     const entry = (label: string, view: View): HTMLElement =>
       el('div', { className: 'sd-home-item', textContent: label, onclick: () => this.navigate(view) })
+    if (!this.connected) {
+      this.list.replaceChildren(
+        el('div', { className: 'ml-group' }, 'MODO CATÁLOGO'),
+        el(
+          'div',
+          { className: 'ml-empty' },
+          'Escribí arriba para buscar temas, discos, artistas o playlists públicas. Tus favoritos, mixes y playlists aparecen cuando TIDAL habilite el login de la app.'
+        )
+      )
+      return
+    }
     this.list.replaceChildren(
       el('div', { className: 'ml-group' }, 'ELEGÍ DE TU BIBLIOTECA O BUSCÁ ARRIBA'),
       entry('♥  Temas favoritos', { kind: 'liked' }),

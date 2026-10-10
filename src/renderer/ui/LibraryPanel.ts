@@ -21,7 +21,7 @@ const sameView = (a: View | undefined, b: View): boolean => JSON.stringify(a) ==
 
 /** Winamp "Media Library"-style window for the TIDAL library. */
 export class LibraryPanel {
-  private auth: AuthInfo = { configured: false, connected: false }
+  private auth: AuthInfo = { configured: false, connected: false, catalog: false }
   private eq: EqStatus = { installed: false }
   private history: View[] = []
   private loadToken = 0
@@ -112,6 +112,9 @@ export class LibraryPanel {
         el('button', { textContent: 'Desconectar', onclick: () => void this.connect(false) })
       )
     } else {
+      if (this.auth.catalog) {
+        tidal.push(el('span', { className: 'ml-ok', title: 'Búsqueda y catálogo sin login' }, '● Modo catálogo'))
+      }
       tidal.push(el('button', { textContent: 'Conectar TIDAL', onclick: () => void this.connect(true) }))
     }
 
@@ -164,7 +167,7 @@ export class LibraryPanel {
 
   private renderNav(): void {
     this.body.classList.toggle('disconnected', !this.auth.connected)
-    this.search.disabled = !this.auth.connected
+    this.search.disabled = !this.auth.catalog
     const item = (label: string, view: View): HTMLElement =>
       el('div', {
         className: `ml-nav-item ${sameView(this.view, view) ? 'selected' : ''}`,
@@ -186,9 +189,11 @@ export class LibraryPanel {
       el(
         'div',
         { className: 'ml-empty' },
-        this.auth.configured
-          ? 'Tocá "Conectar TIDAL" arriba para ver tus favoritos, mixes, playlists, álbumes y artistas. Los controles del Winamp ya funcionan sin conectar.'
-          : 'Configurá el client id de TIDAL en .env (ver README). Los controles del Winamp ya funcionan.'
+        !this.auth.configured
+          ? 'Configurá el client id de TIDAL en .env (ver README). Los controles del Winamp ya funcionan.'
+          : this.auth.catalog
+            ? 'Modo catálogo: buscá arriba (o con "+ Agregar desde TIDAL") cualquier tema, disco, artista o playlist pública y reproducilo o sumalo a la playlist. Tus favoritos, mixes y playlists aparecen cuando TIDAL habilite el login de la app.'
+            : 'Tocá "Conectar TIDAL" arriba para ver tu biblioteca. Los controles del Winamp ya funcionan sin conectar.'
       )
     )
   }
