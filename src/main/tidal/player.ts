@@ -60,22 +60,65 @@ export class TidalPlayer {
 
   // ---- Transport -------------------------------------------------------------
 
+  /** Polls the TIDAL media session until `done` holds; returns the last session seen. */
+  private async waitFor(done: (session: SmtcSession) => boolean, timeoutMs: number): Promise<SmtcSession | undefined> {
+    const until = Date.now() + timeoutMs
+    let session = smtc.session('tidal')
+    while (Date.now() < until && !(session && done(session))) {
+      await new Promise((r) => setTimeout(r, 150))
+      session = smtc.session('tidal')
+    }
+    return session
+  }
+
+  /**
+   * TIDAL's deep links can't start a single track: `?play=true` only starts an
+   * album (or playlist, artist, mix) from its first track. So we start the
+   * track's album and press "next" until TIDAL reaches the chosen track.
+   */
   private async open(index: number): Promise<void> {
     const track = this.queue[index]
     if (!track) return
     this.index = index
-    this.openingUntil = Date.now() + 6000
-    await shell.openExternal(`tidal://track/${track.id}`)
-    // The deep link focuses the track; make sure it actually starts playing.
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise((r) => setTimeout(r, 500))
-      const session = smtc.session('tidal')
-      if (session && sameTrack(session, track)) {
-        if (!session.isPlaying) await smtc.send('play', 'tidal').catch(() => undefined)
-        break
+    this.openingUntil = Date.now() + 60_000
+    try {
+      const before = smtc.session('tidal')
+      if (before && sameTrack(before, track)) {
+        await smtc.send('seek', 'tidal', { positionMs: 0 })
+        if (!before.isPlaying) await smtc.send('play', 'tidal')
+        return
       }
+      const position = await this.api.albumPosition(track.id).catch(() => undefined)
+      const beforeKey = before ? sessionKey(before) : ''
+      // TIDAL ignores a link to the page it's already showing, so leave it first.
+      await shell.openExternal('tidal://home')
+      await new Promise((r) => setTimeout(r, 400))
+      await shell.openExternal(
+        position ? `tidal://album/${position.albumId}?play=true` : `tidal://track/${track.id}?play=true`
+      )
+      // Wait for the album to start (a new song, or ours if it's the first one).
+      const started = (s: SmtcSession): boolean => sameTrack(s, track) || (s.isPlaying && sessionKey(s) !== beforeKey)
+      let session = await this.waitFor(started, 8000)
+      if (!position || !session || !started(session)) return
+      // Skip towards our track. TIDAL drops commands sent while a song loads, so
+      // after each burst see where it landed in the album and correct.
+      for (let round = 0; round < 8 && session && !sameTrack(session, track); round++) {
+        const at = position.tracks.findIndex((t) => sameTrack(session!, t))
+        const delta = at >= 0 ? position.index - at : 1
+        const key = sessionKey(session)
+        for (let i = 0; i < Math.abs(delta); i++) {
+          await smtc.send(delta > 0 ? 'next' : 'previous', 'tidal').catch(() => undefined)
+          await new Promise((r) => setTimeout(r, 300))
+        }
+        session = await this.waitFor((s) => sessionKey(s) !== key, 2500)
+        // Let the remaining commands land before looking again.
+        await new Promise((r) => setTimeout(r, 600))
+        session = smtc.session('tidal')
+      }
+      if (session && !session.isPlaying) await smtc.send('play', 'tidal').catch(() => undefined)
+    } finally {
+      this.openingUntil = 0
     }
-    this.openingUntil = 0
   }
 
   async playTrack(context: PlayContext): Promise<void> {

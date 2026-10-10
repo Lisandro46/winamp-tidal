@@ -51,6 +51,7 @@ El ecualizador del Winamp ecualiza el sonido de **todo Windows** usando [Equaliz
 - **Necesita la app de escritorio de TIDAL abierta** y una cuenta de TIDAL. El sonido sale de TIDAL; esto es un control remoto, no un reproductor aparte.
 - Solo **Windows 10/11 (64 bits)**.
 - **Tus favoritos, mixes y playlists** todavía no aparecen: TIDAL aprueba a mano el login de apps de terceros y aún no lo habilitó ([pedido abierto](https://github.com/orgs/tidal-music/discussions/415)). Cuando lo haga, se activan sin reinstalar nada.
+- Al reproducir un tema desde el Winamp, TIDAL arranca su disco y la app avanza hasta ese tema: tarda unos segundos y puede escucharse un instante de los temas anteriores.
 - Al terminar un tema, TIDAL puede arrancar su radio un instante antes de que el Winamp pase al siguiente.
 - Con el **modo exclusivo** de TIDAL activado, el ecualizador y el visualizador no reciben el audio.
 - El balance de Winamp no tiene efecto.
@@ -87,6 +88,7 @@ A **real Winamp 2** (with `.wsz` skins, via [Webamp](https://github.com/captbari
 - Requires the **TIDAL desktop app** running and a TIDAL account; sound comes from TIDAL.
 - **Windows 10/11 64-bit** only. The UI is in Spanish.
 - Your favorites, mixes and playlists need TIDAL to approve user login for third-party apps ([request](https://github.com/orgs/tidal-music/discussions/415)); they'll light up without reinstalling once it does.
+- Playing a track from Winamp starts its album in TIDAL and skips ahead to it, which takes a few seconds.
 - TIDAL's exclusive mode bypasses the equalizer and visualizer.
 
 ---
@@ -113,7 +115,7 @@ npm run dist    # instalador + portable en dist/ (helper self-contained incluido
 - **Credenciales de TIDAL:** la app usa las que el usuario guarda en el diálogo **TIDAL…**. Para desarrollo podés copiar `.env.example` a `.env`; lo que pongas ahí queda **dentro del build**, así que nunca compartas un instalador armado con un secret. Los instaladores públicos los arma el workflow de GitHub, que no usa `.env`.
 - **Login de usuario (PKCE):** en tu app de TIDAL agregá el redirect `https://lisandro46.github.io/winamp-remote-callback/` (TIDAL no acepta `http`/`localhost`; esa página —repo [winamp-remote-callback](https://github.com/Lisandro46/winamp-remote-callback)— reenvía el login a `127.0.0.1:8889`; el código no sirve sin el verificador PKCE, que nunca sale de la PC) y los scopes `user.read collection.read collection.write playlists.read search.read recommendations.read`.
 - **Publicar una versión:** subí la versión en `package.json`, y luego `git tag vX.Y.Z && git push origin vX.Y.Z`. El workflow [`release.yml`](.github/workflows/release.yml) compila en Windows y adjunta los `.exe` a la Release.
-- La API de reproducción remota de TIDAL es interna, así que los temas se abren con links `tidal://track/<id>` y la app maneja su propia cola.
+- La API de reproducción remota de TIDAL es interna. Sus deep links (`tidal://album/<id>?play=true`) solo arrancan un disco, playlist, artista o mix desde el principio, así que la app abre el disco del tema y avanza con "siguiente" (controles de Windows) hasta llegar. La cola la maneja la app.
 - El ecualizador escribe `winamp-remote.txt` en la carpeta de configuración de Equalizer APO y agrega `Include: winamp-remote.txt` a su `config.txt`.
 
 ```

@@ -1,6 +1,6 @@
 {
   "name": "winamp-tidal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Winamp 2 (Webamp) como control remoto de la app de escritorio de TIDAL",
   "main": "out/main/index.js",
   "author": "Lisandro Arrigoni",

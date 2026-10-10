@@ -97,6 +97,9 @@ export class TidalApi {
   private catalog = this.catalogSession(this.credentials)
   private countryCode: string | undefined
   private trackCache = new Map<string, Track>()
+  private albumOfTrack = new Map<string, string>()
+  /** Track ids of an album in play order (all discs). */
+  private albumOrder = new Map<string, string[]>()
 
   private catalogSession({ clientId, clientSecret }: TidalCredentials): ClientCredentialsSession {
     return new ClientCredentialsSession(TOKEN_URL, clientId, clientSecret)
@@ -233,9 +236,34 @@ export class TidalApi {
           album: included.names(track, 'albums', 'title')[0],
           durationMs: isoDurationToMs(track.attributes?.duration)
         })
+        const albumId = asArray(track.relationships?.albums?.data)[0]?.id
+        if (albumId) this.albumOfTrack.set(track.id, albumId)
       }
     }
     return ids.map((id) => this.trackCache.get(id)).filter((t): t is Track => t != null)
+  }
+
+  /**
+   * The album a track belongs to and its position there. TIDAL's deep links can
+   * only start albums (and playlists, artists, mixes) from their first track.
+   */
+  async albumPosition(trackId: string): Promise<{ albumId: string; index: number; tracks: Track[] } | undefined> {
+    if (!this.albumOfTrack.has(trackId)) {
+      this.trackCache.delete(trackId)
+      await this.tracks([trackId])
+    }
+    const albumId = this.albumOfTrack.get(trackId)
+    if (!albumId) return undefined
+    let order = this.albumOrder.get(albumId)
+    if (!order) {
+      const countryCode = await this.country()
+      const { data } = await this.getAll(this.url(`/albums/${encodeURIComponent(albumId)}/relationships/items`, { countryCode }))
+      order = data.map((item) => item.id)
+      this.albumOrder.set(albumId, order)
+    }
+    const index = order.indexOf(trackId)
+    // Titles let the player tell where in the album TIDAL is.
+    return index >= 0 ? { albumId, index, tracks: await this.tracks(order) } : undefined
   }
 
   private async albums(ids: string[]): Promise<Collection[]> {
