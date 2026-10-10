@@ -19,7 +19,9 @@ const ignore = (promise: Promise<unknown>): void => {
  *  - TIDAL state → Webamp playlist selection, marquee, clock and status
  */
 export class RemoteController {
-  private tracks: Track[] = []
+  /** Every TIDAL track ever put in the playlist, by id (the playlist only keeps urls). */
+  private known = new Map<string, Track>()
+  private queueKey = ''
   private lastState: PlaybackState | null = null
   private volumeArmed = false
   private volumeTouchedAt = 0
@@ -45,6 +47,25 @@ export class RemoteController {
       }
     })
     this.interceptTransport()
+    // Removing, reordering or adding entries in the Winamp playlist edits the queue.
+    webamp.store.subscribe(() => this.syncQueue())
+  }
+
+  /** The Winamp playlist, in order, as TIDAL tracks. */
+  private queue(): Track[] {
+    return this.webamp
+      .getPlaylistTracks()
+      .filter((entry) => entry.url.startsWith(TRACK_URL))
+      .map((entry) => this.known.get(entry.url.slice(TRACK_URL.length)))
+      .filter((track): track is Track => track != null)
+  }
+
+  private syncQueue(): void {
+    const urls = this.webamp.getPlaylistTracks().map((entry) => entry.url)
+    const key = urls.join('|')
+    if (key === this.queueKey) return
+    this.queueKey = key
+    ignore(window.remote.setQueue(this.queue()))
   }
 
   // ---- Webamp → TIDAL ----------------------------------------------------------
@@ -55,11 +76,14 @@ export class RemoteController {
     window.addEventListener(
       'click',
       (event) => {
-        const button = (event.target as HTMLElement).closest('#webamp #next, #webamp #previous, #webamp #eject')
+        const button = (event.target as HTMLElement).closest(
+          '#webamp #next, #webamp #previous, #webamp #eject, #webamp #playlist-add-menu'
+        )
         if (!button) return
         event.stopPropagation()
         event.preventDefault()
         if (button.id === 'eject') document.dispatchEvent(new CustomEvent('library:toggle'))
+        else if (button.id === 'playlist-add-menu') document.dispatchEvent(new CustomEvent('search:open'))
         else ignore(button.id === 'next' ? remote.next() : remote.previous())
       },
       true
@@ -76,6 +100,11 @@ export class RemoteController {
         } else if (key === 'l' || event.code === 'Numpad0') {
           event.stopPropagation()
           document.dispatchEvent(new CustomEvent('library:toggle'))
+        } else if (key === 'j') {
+          // Winamp's "Jump to file", here: search TIDAL.
+          event.stopPropagation()
+          event.preventDefault()
+          document.dispatchEvent(new CustomEvent('search:open'))
         }
       },
       true
@@ -85,27 +114,42 @@ export class RemoteController {
   private playUrl(url: string): void {
     if (url === NOW_PLAYING_URL) return ignore(window.remote.resume())
     if (!url.startsWith(TRACK_URL)) return
-    const index = this.tracks.findIndex((t) => t.id === url.slice(TRACK_URL.length))
-    if (index >= 0) ignore(window.remote.playTrack({ tracks: this.tracks, index }))
+    const tracks = this.queue()
+    const index = tracks.findIndex((t) => t.id === url.slice(TRACK_URL.length))
+    if (index >= 0) ignore(window.remote.playTrack({ tracks, index }))
   }
 
   // ---- Library → Webamp playlist -------------------------------------------
 
-  /** Replaces Webamp's playlist with `tracks` and optionally starts one. */
+  private append(tracks: Track[]): void {
+    for (const track of tracks) this.known.set(track.id, track)
+    this.webamp.appendTracks(
+      tracks.map((track) => ({
+        url: TRACK_URL + track.id,
+        duration: track.durationMs / 1000,
+        metaData: { title: track.title, artist: track.artist, album: track.album }
+      }))
+    )
+  }
+
+  /** Replaces Webamp's playlist with `tracks` (an album, playlist…) and optionally starts one. */
   loadList(tracks: Track[], playIndex?: number): void {
-    this.tracks = tracks
     withoutEcho(() => {
       this.webamp.store.dispatch({ type: 'REMOVE_ALL_TRACKS' })
-      this.webamp.appendTracks(
-        tracks.map((track) => ({
-          url: TRACK_URL + track.id,
-          duration: track.durationMs / 1000,
-          metaData: { title: track.title, artist: track.artist, album: track.album }
-        }))
-      )
+      this.append(tracks)
     })
-    if (playIndex != null) ignore(window.remote.playTrack({ tracks, index: playIndex }))
+    this.syncQueue()
+    if (playIndex != null) ignore(window.remote.playTrack({ tracks: this.queue(), index: playIndex }))
     else if (this.lastState) this.applyState(this.lastState)
+  }
+
+  /** Adds tracks at the end of the playlist (Winamp's "enqueue"); optionally plays the first. */
+  enqueue(tracks: Track[], play = false): void {
+    if (!tracks.length) return
+    const start = this.queue().length
+    withoutEcho(() => this.append(tracks))
+    this.syncQueue()
+    if (play) ignore(window.remote.playTrack({ tracks: this.queue(), index: start }))
   }
 
   // ---- TIDAL → Webamp ----------------------------------------------------------

@@ -3,6 +3,8 @@ import './styles/app.css'
 import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
 import { LibraryPanel, type SkinActions } from './ui/LibraryPanel'
+import { SearchDialog } from './ui/SearchDialog'
+import { favorites } from './ui/library'
 import { keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
@@ -78,6 +80,8 @@ async function main(): Promise<void> {
   controller.restoreEq(settings.eq)
 
   library = new LibraryPanel($('#library'), controller, skinActions(webamp))
+  new SearchDialog($('#tidal-search'), controller)
+  window.remote.onLiked((ids) => favorites.set(ids))
   await library.init()
   await window.remote.ready()
 }

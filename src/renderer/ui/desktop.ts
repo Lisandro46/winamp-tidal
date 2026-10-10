@@ -6,7 +6,7 @@
 import type { DesktopLayout, Rect } from '@shared/types'
 
 /** UI that should receive the mouse; everything else is click-through. */
-const INTERACTIVE = '#webamp, #library:not(.hidden), [id^="webamp-"]'
+const INTERACTIVE = '#webamp, #library:not(.hidden), #tidal-search:not(.hidden), [id^="webamp-"]'
 
 export function trackPointer(): void {
   let interactive: boolean | undefined
@@ -73,6 +73,8 @@ const contains = (d: Rect, x: number, y: number): boolean =>
  */
 export function keepOnScreen(panel: HTMLElement): void {
   const rect = panel.getBoundingClientRect()
+  // Hidden panels have no box yet; they are checked again when shown.
+  if (!rect.width) return
   const gripX = rect.left + Math.min(rect.width / 2, TITLE_GRIP)
   const gripY = rect.top + 8
   const target =
@@ -85,11 +87,23 @@ export function keepOnScreen(panel: HTMLElement): void {
   panel.style.top = `${top}px`
 }
 
-/** Makes `panel` draggable by `handle`; position and size survive restarts. */
-export function makeFloating(panel: HTMLElement, handle: HTMLElement, storageKey: string): void {
+/** Centers `panel` on the primary monitor (for panels that have never been moved). */
+export function centerOnPrimary(panel: HTMLElement): void {
+  const rect = panel.getBoundingClientRect()
+  panel.style.left = `${primary.x + (primary.width - rect.width) / 2}px`
+  panel.style.top = `${primary.y + (primary.height - rect.height) / 3}px`
+}
+
+/**
+ * Makes `panel` draggable by `handle`; position and size survive restarts.
+ * Returns whether a saved position was restored.
+ */
+export function makeFloating(panel: HTMLElement, handle: HTMLElement, storageKey: string): boolean {
+  let restored = false
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Position | null
     if (saved) {
+      restored = true
       panel.style.left = `${primary.x + saved.left}px`
       panel.style.top = `${primary.y + saved.top}px`
       if (saved.width) panel.style.width = `${saved.width}px`
@@ -131,8 +145,11 @@ export function makeFloating(panel: HTMLElement, handle: HTMLElement, storageKey
     handle.addEventListener('pointerup', up, { once: true })
   })
 
-  // CSS `resize` changes the size; remember it too.
-  new ResizeObserver(() => save()).observe(panel)
+  // CSS `resize` changes the size; remember it too (ignoring hide/show).
+  new ResizeObserver(() => {
+    if (panel.getBoundingClientRect().width) save()
+  }).observe(panel)
+  return restored
 }
 
 /** Minimal slice of Webamp's store we need to reposition its windows. */

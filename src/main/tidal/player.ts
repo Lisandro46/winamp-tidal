@@ -29,6 +29,8 @@ export class TidalPlayer {
   private queue: Track[] = []
   private index = -1
   private lastSession: SmtcSession | undefined
+  /** While a deep link is opening, TIDAL still reports the previous track. */
+  private openingUntil = 0
   /** TIDAL ids for "title|artist" of tracks not started from our queue. */
   private resolved = new Map<string, Track | null>()
   private liked = new Set<string>()
@@ -62,6 +64,7 @@ export class TidalPlayer {
     const track = this.queue[index]
     if (!track) return
     this.index = index
+    this.openingUntil = Date.now() + 6000
     await shell.openExternal(`tidal://track/${track.id}`)
     // The deep link focuses the track; make sure it actually starts playing.
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -69,14 +72,22 @@ export class TidalPlayer {
       const session = smtc.session('tidal')
       if (session && sameTrack(session, track)) {
         if (!session.isPlaying) await smtc.send('play', 'tidal').catch(() => undefined)
-        return
+        break
       }
     }
+    this.openingUntil = 0
   }
 
   async playTrack(context: PlayContext): Promise<void> {
     this.queue = context.tracks
     await this.open(context.index)
+  }
+
+  /** The Winamp playlist changed (tracks added, removed or reordered). */
+  setQueue(tracks: Track[]): void {
+    const current = this.queue[this.index]
+    this.queue = tracks
+    this.index = current ? tracks.findIndex((t) => t.id === current.id) : -1
   }
 
   resume = (): Promise<void> => smtc.send('play', 'tidal')
@@ -118,13 +129,18 @@ export class TidalPlayer {
       const previous = this.lastSession
       this.lastSession = session
       const current = this.queue[this.index]
+      const opening = Date.now() < this.openingUntil
 
       // TIDAL keeps playing its own radio after a deep-linked track ends, so we
       // advance through our queue when the track we started finishes.
-      if (current && previous && session && sameTrack(previous, current) && !sameTrack(session, current)) {
+      if (!opening && current && previous && session && sameTrack(previous, current) && !sameTrack(session, current)) {
         const nearEnd = previous.durationMs > 0 && previous.positionMs >= previous.durationMs - 5000
         if (nearEnd && this.index + 1 < this.queue.length) void this.open(this.index + 1)
         else if (!nearEnd) this.index = this.queue.findIndex((t) => sameTrack(session, t))
+      } else if (!opening && session && (!current || !sameTrack(session, current))) {
+        // Started from TIDAL itself or the queue was edited: follow it if it's queued.
+        const found = this.queue.findIndex((t) => sameTrack(session, t))
+        if (found >= 0) this.index = found
       }
 
       if (!session || (!session.title && !session.artist)) {

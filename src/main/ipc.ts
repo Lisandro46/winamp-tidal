@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { AuthInfo, Collection, EqState, PlayContext } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext, Track } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { Equalizer } from './audio/equalizer'
 import { smtc } from './smtc/helperClient'
@@ -66,6 +66,7 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('getLikedIds', () => player.likedIds())
 
   handle('playTrack', (context: PlayContext) => player.playTrack(context))
+  handle('setQueue', (tracks: Track[]) => player.setQueue(tracks))
   handle('resume', () => player.resume())
   handle('pause', () => player.pause())
   handle('next', () => player.next())

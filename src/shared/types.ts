@@ -114,6 +114,8 @@ export interface RemoteApi {
   getLikedIds(): Promise<string[]>
 
   playTrack(context: PlayContext): Promise<void>
+  /** Keeps the app's queue in sync with the Winamp playlist. */
+  setQueue(tracks: Track[]): Promise<void>
   resume(): Promise<void>
   pause(): Promise<void>
   next(): Promise<void>

@@ -1,13 +1,13 @@
 import type { AuthInfo, Collection, EqStatus, PlaybackState, SearchResults, Track } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
 import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
+import { favorites, library, SECTIONS, type Section } from './library'
+import { collectionRow, el, heartButton, refreshHearts, trackRow } from './rows'
 
 export interface SkinActions {
   pick(): void
   reset(): void
 }
-
-type Section = 'mixes' | 'playlists' | 'albums' | 'artists'
 
 type View =
   | { kind: 'liked' }
@@ -15,30 +15,7 @@ type View =
   | { kind: 'collection'; collection: Collection }
   | { kind: 'search'; query: string }
 
-const SECTIONS: { section: Section; label: string; load: () => Promise<Collection[]> }[] = [
-  { section: 'mixes', label: 'Mixes para vos', load: () => window.remote.getMixes() },
-  { section: 'playlists', label: 'Playlists', load: () => window.remote.getPlaylists() },
-  { section: 'albums', label: 'Álbumes', load: () => window.remote.getAlbums() },
-  { section: 'artists', label: 'Artistas', load: () => window.remote.getArtists() }
-]
-
 const EQ_APO_URL = 'https://sourceforge.net/projects/equalizerapo/'
-
-const formatDuration = (ms: number): string => {
-  const total = Math.round(ms / 1000)
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag)
-  Object.assign(node, props)
-  node.append(...children)
-  return node
-}
 
 const sameView = (a: View | undefined, b: View): boolean => JSON.stringify(a) === JSON.stringify(b)
 
@@ -46,9 +23,7 @@ const sameView = (a: View | undefined, b: View): boolean => JSON.stringify(a) ==
 export class LibraryPanel {
   private auth: AuthInfo = { configured: false, connected: false }
   private eq: EqStatus = { installed: false }
-  private liked = new Set<string>()
   private history: View[] = []
-  private cache = new Map<string, Collection[] | Track[]>()
   private loadToken = 0
   private nowPlayingTrackId: string | undefined
 
@@ -76,11 +51,7 @@ export class LibraryPanel {
         { className: 'ml-titlebar-actions' },
         el('button', { textContent: 'Skin…', title: 'Cargar un skin .wsz', onclick: () => skins.pick() }),
         el('button', { textContent: 'Skin base', title: 'Volver al skin clásico', onclick: () => skins.reset() }),
-        el('button', {
-          textContent: '×',
-          title: 'Ocultar (L)',
-          onclick: () => root.classList.add('hidden')
-        })
+        el('button', { textContent: '×', title: 'Ocultar (L)', onclick: () => root.classList.add('hidden') })
       )
     )
     root.append(titlebar, this.status, this.body, this.nowPlaying)
@@ -100,11 +71,12 @@ export class LibraryPanel {
       if (event.key === 'Enter' && query) void this.open({ kind: 'search', query })
     })
     window.remote.onState((state) => this.renderNowPlaying(state))
-    window.remote.onLiked((ids) => {
-      this.liked = new Set(ids)
-      this.refreshHearts()
+    favorites.listeners.add(() => {
+      refreshHearts(this.content, this.auth.connected)
+      this.nowPlaying.querySelector('.ml-heart')?.replaceWith(heartButton(this.nowPlayingTrackId, this.auth.connected))
     })
     document.addEventListener('library:toggle', () => root.classList.toggle('hidden'))
+    document.addEventListener('auth:changed', () => void this.refreshAuth())
     this.renderNowPlaying(null)
   }
 
@@ -116,10 +88,10 @@ export class LibraryPanel {
     ])
     this.auth = auth
     this.eq = eq
-    this.liked = new Set(liked)
+    favorites.set(liked)
     this.renderStatus()
     this.renderNav()
-    if (auth.connected) await this.open({ kind: 'liked' })
+    if (auth.connected) await this.open({ kind: 'liked' }, true)
     else this.renderWelcome()
   }
 
@@ -147,33 +119,40 @@ export class LibraryPanel {
       ? [el('span', { className: 'ml-warn', title: this.eq.error }, '⚠ EQ sin permisos')]
       : this.eq.installed
         ? [el('span', { className: 'ml-ok', title: this.eq.configDir ?? '' }, '● EQ activo')]
-        : [
-            el('a', {
-              href: EQ_APO_URL,
-              target: '_blank',
-              textContent: 'Instalar Equalizer APO',
-              title: 'Necesario para que el ecualizador del Winamp suene'
-            })
-          ]
+        : [el('a', { href: EQ_APO_URL, target: '_blank', textContent: 'Instalar Equalizer APO' })]
 
     this.status.replaceChildren(
       el('div', { className: 'ml-status-group' }, ...tidal),
-      el('div', { className: 'ml-status-group' }, ...eq)
+      el(
+        'div',
+        { className: 'ml-status-group' },
+        el('button', {
+          textContent: '+ Agregar desde TIDAL',
+          title: 'Buscar y elegir temas, álbumes, artistas o playlists (J)',
+          onclick: () => document.dispatchEvent(new CustomEvent('search:open'))
+        }),
+        ...eq
+      )
     )
   }
 
   private async connect(connect: boolean): Promise<void> {
     this.status.replaceChildren(connect ? 'Abriendo el login de TIDAL en el navegador…' : 'Desconectando…')
     try {
-      this.auth = await (connect ? window.remote.connect() : window.remote.disconnect())
+      await (connect ? window.remote.connect() : window.remote.disconnect())
     } catch {
-      this.auth = await window.remote.getAuth()
+      // the error toast explains what happened
     }
-    this.cache.clear()
+    await this.refreshAuth()
+  }
+
+  private async refreshAuth(): Promise<void> {
+    this.auth = await window.remote.getAuth()
+    library.invalidate()
     this.history = []
     this.renderStatus()
     this.renderNav()
-    if (this.auth.connected) await this.open({ kind: 'liked' })
+    if (this.auth.connected) await this.open({ kind: 'liked' }, true)
     else this.renderWelcome()
   }
 
@@ -208,7 +187,7 @@ export class LibraryPanel {
         'div',
         { className: 'ml-empty' },
         this.auth.configured
-          ? 'Conectá TIDAL para ver tus favoritos, mixes, playlists, álbumes y artistas. Los controles del Winamp ya funcionan sin conectar.'
+          ? 'Tocá "Conectar TIDAL" arriba para ver tus favoritos, mixes, playlists, álbumes y artistas. Los controles del Winamp ya funcionan sin conectar.'
           : 'Configurá el client id de TIDAL en .env (ver README). Los controles del Winamp ya funcionan.'
       )
     )
@@ -217,8 +196,7 @@ export class LibraryPanel {
   private goBack(): void {
     if (this.history.length < 2) return
     this.history.pop()
-    const previous = this.history.pop()!
-    void this.open(previous)
+    void this.open(this.history.pop()!)
   }
 
   private async open(view: View, root = false): Promise<void> {
@@ -234,20 +212,17 @@ export class LibraryPanel {
     try {
       if (view.kind === 'liked') {
         this.title.textContent = '♥ Temas favoritos'
-        const tracks = await this.cached('liked', () => window.remote.getLikedTracks())
-        if (!stale()) this.showTracks(tracks as Track[])
+        const tracks = await library.liked()
+        if (!stale()) this.showTracks(tracks)
       } else if (view.kind === 'section') {
-        const section = SECTIONS.find((s) => s.section === view.section)!
-        this.title.textContent = section.label
-        const collections = await this.cached(view.section, section.load)
-        if (!stale()) this.showCollections(collections as Collection[])
+        this.title.textContent = SECTIONS.find((s) => s.section === view.section)!.label
+        const collections = await library.section(view.section)
+        if (!stale()) this.showCollections(collections)
       } else if (view.kind === 'collection') {
         const { collection } = view
         this.title.textContent = collection.subtitle ? `${collection.name} — ${collection.subtitle}` : collection.name
-        const tracks = await this.cached(`${collection.kind}:${collection.id}`, () =>
-          window.remote.getTracks(collection)
-        )
-        if (!stale()) this.showTracks(tracks as Track[])
+        const tracks = await library.tracks(collection)
+        if (!stale()) this.showTracks(tracks)
       } else {
         this.title.textContent = `Búsqueda: ${view.query}`
         const results = await window.remote.search(view.query)
@@ -258,55 +233,7 @@ export class LibraryPanel {
     }
   }
 
-  private async cached<T extends Collection[] | Track[]>(key: string, load: () => Promise<T>): Promise<T> {
-    if (!this.cache.has(key)) this.cache.set(key, await load())
-    return this.cache.get(key) as T
-  }
-
   // ---- Rendering -----------------------------------------------------------------
-
-  private heart(trackId: string | undefined): HTMLElement {
-    const liked = trackId != null && this.liked.has(trackId)
-    return el('button', {
-      className: `ml-heart ${liked ? 'liked' : ''}`,
-      textContent: liked ? '♥' : '♡',
-      title: liked ? 'Quitar de favoritos' : 'Agregar a favoritos',
-      disabled: trackId == null || !this.auth.connected,
-      onclick: (event: MouseEvent) => {
-        event.stopPropagation()
-        if (!trackId) return
-        this.cache.delete('liked')
-        void window.remote.setLiked(trackId, !liked).catch(() => undefined)
-      }
-    })
-  }
-
-  private refreshHearts(): void {
-    for (const row of this.content.querySelectorAll<HTMLElement>('[data-track-id]')) {
-      row.querySelector('.ml-heart')?.replaceWith(this.heart(row.dataset.trackId))
-    }
-    this.nowPlaying.querySelector('.ml-heart')?.replaceWith(this.heart(this.nowPlayingTrackId))
-  }
-
-  private trackRows(tracks: Track[]): HTMLElement[] {
-    return tracks.map((track, index) => {
-      const row = el(
-        'div',
-        {
-          className: 'ml-track',
-          title: 'Doble click para reproducir',
-          ondblclick: () => this.controller.loadList(tracks, index)
-        },
-        el('span', { className: 'n' }, String(index + 1)),
-        this.heart(track.id),
-        el('span', { className: 't' }, track.title),
-        el('span', { className: 'a' }, track.artist),
-        el('span', { className: 'd' }, formatDuration(track.durationMs))
-      )
-      row.dataset.trackId = track.id
-      return row
-    })
-  }
 
   private showTracks(tracks: Track[]): void {
     if (tracks.length) {
@@ -314,43 +241,31 @@ export class LibraryPanel {
         el('button', { textContent: '▶ Reproducir', onclick: () => this.controller.loadList(tracks, 0) }),
         el('button', {
           textContent: '⤮ Aleatorio',
-          onclick: () => {
-            const shuffled = [...tracks].sort(() => Math.random() - 0.5)
-            this.controller.loadList(shuffled, 0)
-          }
+          onclick: () => this.controller.loadList([...tracks].sort(() => Math.random() - 0.5), 0)
         }),
-        el('button', { textContent: '+ Enviar al Winamp', onclick: () => this.controller.loadList(tracks) })
+        el('button', { textContent: '+ Agregar todo', onclick: () => this.controller.enqueue(tracks) })
       )
     }
     this.content.replaceChildren(
-      ...(tracks.length ? this.trackRows(tracks) : [el('div', { className: 'ml-empty' }, 'Vacío')])
+      ...(tracks.length
+        ? tracks.map((track, index) =>
+            trackRow(
+              track,
+              index,
+              { play: () => this.controller.loadList(tracks, index), add: () => this.controller.enqueue([track]) },
+              this.auth.connected
+            )
+          )
+        : [el('div', { className: 'ml-empty' }, 'Vacío')])
     )
   }
 
   private collectionRows(collections: Collection[]): HTMLElement[] {
     return collections.map((collection) =>
-      el(
-        'div',
-        {
-          className: 'ml-collection',
-          onclick: () => void this.open({ kind: 'collection', collection })
-        },
-        collection.artworkUrl
-          ? el('img', { src: collection.artworkUrl, alt: '', loading: 'lazy' })
-          : el('div', { className: 'ml-cover-placeholder' }, '♫'),
-        el(
-          'div',
-          { className: 'ml-collection-text' },
-          el('div', { className: 'name' }, collection.name),
-          el(
-            'div',
-            { className: 'sub' },
-            [collection.subtitle, collection.trackCount != null ? `${collection.trackCount} temas` : '']
-              .filter(Boolean)
-              .join(' · ')
-          )
-        )
-      )
+      collectionRow(collection, () => void this.open({ kind: 'collection', collection }), {
+        play: () => void library.tracks(collection).then((t) => this.controller.loadList(t, 0)).catch(() => undefined),
+        add: () => void library.tracks(collection).then((t) => this.controller.enqueue(t)).catch(() => undefined)
+      })
     )
   }
 
@@ -363,20 +278,23 @@ export class LibraryPanel {
   }
 
   private showSearch(results: SearchResults): void {
+    const trackRows = results.tracks.map((track, index) =>
+      trackRow(
+        track,
+        index,
+        { play: () => this.controller.enqueue([track], true), add: () => this.controller.enqueue([track]) },
+        this.auth.connected
+      )
+    )
     const groups: [string, HTMLElement[]][] = [
-      ['TEMAS', this.trackRows(results.tracks)],
-      ['ÁLBUMES', this.collectionRows(results.albums)],
+      ['TEMAS', trackRows],
+      ['ÁLBUMES (CD)', this.collectionRows(results.albums)],
       ['ARTISTAS', this.collectionRows(results.artists)],
       ['PLAYLISTS', this.collectionRows(results.playlists)]
     ]
     const nodes = groups
       .filter(([, rows]) => rows.length)
       .flatMap(([label, rows]) => [el('div', { className: 'ml-group' }, label), ...rows])
-    if (results.tracks.length) {
-      this.actions.replaceChildren(
-        el('button', { textContent: '▶ Reproducir temas', onclick: () => this.controller.loadList(results.tracks, 0) })
-      )
-    }
     this.content.replaceChildren(...(nodes.length ? nodes : [el('div', { className: 'ml-empty' }, 'Sin resultados')]))
   }
 
@@ -387,7 +305,8 @@ export class LibraryPanel {
       return
     }
     const current = this.nowPlaying.querySelector('img')
-    const image = current && current.src === state.artworkUrl ? current : el('img', { src: state.artworkUrl ?? '', alt: '' })
+    const image =
+      current && current.src === state.artworkUrl ? current : el('img', { src: state.artworkUrl ?? '', alt: '' })
     image.hidden = !state.artworkUrl
     this.nowPlaying.replaceChildren(
       image,
@@ -398,7 +317,7 @@ export class LibraryPanel {
         el('div', {}, state.artist),
         el('div', { className: 'ml-now-dim' }, state.album ?? '')
       ),
-      this.heart(state.trackId)
+      heartButton(state.trackId, this.auth.connected)
     )
   }
 }

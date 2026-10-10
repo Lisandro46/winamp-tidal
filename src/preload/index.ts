@@ -32,6 +32,7 @@ const methods = [
   'setLiked',
   'getLikedIds',
   'playTrack',
+  'setQueue',
   'resume',
   'pause',
   'next',

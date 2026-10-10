@@ -68,7 +68,8 @@ button:disabled {
   flex-direction: column;
   background: var(--panel);
 }
-#library.hidden {
+#library.hidden,
+#tidal-search.hidden {
   display: none;
 }
 .ml-titlebar {
@@ -186,7 +187,7 @@ button:disabled {
 }
 .ml-track {
   display: grid;
-  grid-template-columns: 30px 18px 1fr 0.8fr 40px;
+  grid-template-columns: 30px 18px 1fr 0.8fr 40px 44px;
   align-items: center;
   gap: 6px;
   padding: 1px 6px;
@@ -367,4 +368,91 @@ button:disabled {
   padding: 0 6px;
   font-size: 10px;
   font-weight: normal;
+}
+
+/* ---- ▶ / + row actions ---- */
+.row-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  visibility: hidden;
+}
+.ml-track:hover .row-actions,
+.ml-collection:hover .row-actions,
+.sd-selected .row-actions {
+  visibility: visible;
+}
+.row-actions button {
+  width: 20px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 16px;
+}
+.ml-collection .row-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ---- "Agregar desde TIDAL" (search dialog) ---- */
+#tidal-search {
+  position: fixed;
+  left: 40%;
+  top: 25%;
+  width: 520px;
+  height: 520px;
+  min-width: 380px;
+  min-height: 300px;
+  resize: both;
+  overflow: hidden;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
+  background: var(--panel);
+  border: 2px solid var(--bevel-light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+}
+#tidal-search > :not(.ml-titlebar) {
+  margin: 0 6px;
+}
+.sd-top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px !important;
+}
+.sd-top .ml-search {
+  font-size: 13px;
+  padding: 6px;
+}
+.sd-filters {
+  display: flex;
+  gap: 2px;
+}
+.sd-filter {
+  flex: 1;
+}
+.sd-filter.active {
+  color: var(--text);
+  background: var(--panel-dark);
+}
+.sd-list {
+  flex: 1;
+  min-height: 0;
+}
+.sd-home-item {
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sd-home-item:hover,
+.sd-selected {
+  background: var(--selected) !important;
+  color: #fff;
+}
+.sd-hint {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align: center;
 }
