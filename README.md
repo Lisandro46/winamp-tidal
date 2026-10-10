@@ -33,7 +33,8 @@ Una skin de **Winamp 2 real** (archivos `.wsz`, vía [Webamp](https://github.com
 ## Configuración
 
 1. Creá una app en <https://developer.tidal.com/dashboard>
-   - Redirect URI: `http://127.0.0.1:8889/callback`
+   - Redirect URI: `https://lisandro46.github.io/winamp-remote-callback/`
+     (TIDAL no acepta redirects `http`/`localhost`; esa página —repo público [winamp-remote-callback](https://github.com/Lisandro46/winamp-remote-callback)— reenvía el login a la app en `127.0.0.1:8889`. Es segura: el código no sirve sin el verificador PKCE, que nunca sale de tu PC)
    - Scopes: `user.read collection.read collection.write playlists.read search.read recommendations.read`
 2. Copiá `.env.example` a `.env` y poné tu client ID. Con PKCE no hace falta ningún secret.
 

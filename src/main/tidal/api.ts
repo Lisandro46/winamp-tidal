@@ -79,7 +79,9 @@ export class TidalApi {
       'search.read',
       'recommendations.read'
     ],
-    port: 8889
+    port: 8889,
+    // TIDAL rejects localhost/http redirects; this page forwards to 127.0.0.1:8889.
+    redirectUri: 'https://lisandro46.github.io/winamp-remote-callback/'
   }))
   private countryCode: string | undefined
   private trackCache = new Map<string, Track>()

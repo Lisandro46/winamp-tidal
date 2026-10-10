@@ -7,8 +7,14 @@ export interface OAuthConfig {
   tokenUrl: string
   clientId: string
   scopes: string[]
-  /** Loopback port; the redirect URI is http://127.0.0.1:<port>/callback. */
+  /** Loopback port the app listens on for http://127.0.0.1:<port>/callback. */
   port: number
+  /**
+   * Redirect URI registered with the provider, when it differs from the loopback
+   * address (e.g. an HTTPS page that forwards to it, for providers that reject
+   * localhost redirects).
+   */
+  redirectUri?: string
 }
 
 export interface TokenSet {
@@ -23,7 +29,8 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const base64Url = (buffer: Buffer): string =>
   buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
-export const redirectUri = (port: number): string => `http://127.0.0.1:${port}/callback`
+const loopbackUri = (port: number): string => `http://127.0.0.1:${port}/callback`
+const redirectUri = (config: OAuthConfig): string => config.redirectUri ?? loopbackUri(config.port)
 
 const RESULT_PAGE = (message: string): string => `<!doctype html><meta charset="utf-8">
 <title>Winamp Remote</title>
@@ -37,7 +44,7 @@ async function waitForAuthorizationCode(config: OAuthConfig, url: URL, state: st
     return await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Login timed out')), LOGIN_TIMEOUT_MS)
       server = createServer((req, res) => {
-        const params = new URL(req.url ?? '/', redirectUri(config.port)).searchParams
+        const params = new URL(req.url ?? '/', loopbackUri(config.port)).searchParams
         if (!req.url?.startsWith('/callback')) {
           res.writeHead(404).end()
           return
@@ -100,7 +107,7 @@ export async function login(config: OAuthConfig): Promise<TokenSet> {
   url.search = new URLSearchParams({
     response_type: 'code',
     client_id: config.clientId,
-    redirect_uri: redirectUri(config.port),
+    redirect_uri: redirectUri(config),
     scope: config.scopes.join(' '),
     code_challenge_method: 'S256',
     code_challenge: challenge,
@@ -111,7 +118,7 @@ export async function login(config: OAuthConfig): Promise<TokenSet> {
   return requestToken(config.tokenUrl, {
     grant_type: 'authorization_code',
     code,
-    redirect_uri: redirectUri(config.port),
+    redirect_uri: redirectUri(config),
     client_id: config.clientId,
     code_verifier: verifier
   })
