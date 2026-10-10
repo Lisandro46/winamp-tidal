@@ -1,37 +1,40 @@
 // Types shared by the main process, preload and renderer.
 
-export type ProviderId = 'spotify' | 'tidal' | 'system'
-
 export interface Track {
   id: string
-  /** Provider URI used to start playback (spotify:track:…, tidal track id, …). */
-  uri: string
   title: string
   artist: string
   album?: string
   durationMs: number
 }
 
-export interface Playlist {
+export type CollectionKind = 'playlist' | 'album' | 'artist' | 'mix'
+
+/** Anything that resolves to a list of tracks: playlist, album, artist top tracks or mix. */
+export interface Collection {
+  kind: CollectionKind
   id: string
   name: string
-  uri?: string
+  subtitle?: string
   trackCount?: number
-  /** False when the provider refuses to list the tracks (e.g. followed Spotify playlists). */
-  tracksListable: boolean
+  artworkUrl?: string
 }
 
-/** Where a track was started from, so the remote player can keep going through it. */
+export interface SearchResults {
+  tracks: Track[]
+  albums: Collection[]
+  artists: Collection[]
+  playlists: Collection[]
+}
+
+/** The list a track was started from, so the app can keep going through it. */
 export interface PlayContext {
-  playlist?: Playlist
-  /** Ordered tracks of the list the user picked from (liked songs, search results, …). */
   tracks: Track[]
   index: number
 }
 
 export interface PlaybackState {
-  provider: ProviderId
-  /** Matches Track.id when the remote is playing something we listed. */
+  /** TIDAL track id when known (matched in the queue or resolved through the API). */
   trackId?: string
   title: string
   artist: string
@@ -40,59 +43,81 @@ export interface PlaybackState {
   durationMs: number
   positionMs: number
   isPlaying: boolean
-  /** 0-100, or null when the provider cannot report/change volume. */
-  volume: number | null
-  /** Name of the device/app actually producing sound. */
-  device?: string
+  liked?: boolean
 }
 
-export interface ProviderCapabilities {
-  library: boolean
-  search: boolean
-  volume: boolean
-  seek: boolean
+export interface SystemVolume {
+  volume: number
+  muted: boolean
+  device: string
 }
 
-export interface ProviderInfo {
-  id: ProviderId
-  name: string
+/** Webamp's equalizer: values are 0-100 with 50 = 0 dB (±12 dB range). */
+export interface EqState {
+  on: boolean
+  preamp: number
+  bands: number[]
+}
+
+export interface EqStatus {
+  installed: boolean
+  configDir?: string
+  error?: string
+}
+
+export interface AuthInfo {
+  configured: boolean
   connected: boolean
-  capabilities: ProviderCapabilities
-  /** Human-readable reason the provider cannot be used yet (missing client id, …). */
-  setupHint?: string
+  hint?: string
 }
 
 export interface AppSettings {
-  provider: ProviderId
   skinUrl?: string
+  eq?: EqState
+}
+
+export interface PcmChunk {
+  rate: number
+  /** Base64 mono signed 16-bit PCM. */
+  data: string
 }
 
 /** API exposed by the preload script as `window.remote`. */
 export interface RemoteApi {
-  listProviders(): Promise<ProviderInfo[]>
+  getAuth(): Promise<AuthInfo>
+  connect(): Promise<AuthInfo>
+  disconnect(): Promise<AuthInfo>
   getSettings(): Promise<AppSettings>
-  selectProvider(id: ProviderId): Promise<ProviderInfo>
-  connect(id: ProviderId): Promise<ProviderInfo>
-  disconnect(id: ProviderId): Promise<ProviderInfo>
   setSkin(url: string | undefined): Promise<void>
 
-  getPlaylists(): Promise<Playlist[]>
-  getPlaylistTracks(playlistId: string): Promise<Track[]>
   getLikedTracks(): Promise<Track[]>
-  search(query: string): Promise<Track[]>
+  getPlaylists(): Promise<Collection[]>
+  getMixes(): Promise<Collection[]>
+  getAlbums(): Promise<Collection[]>
+  getArtists(): Promise<Collection[]>
+  getTracks(collection: Collection): Promise<Track[]>
+  search(query: string): Promise<SearchResults>
+  setLiked(trackId: string, liked: boolean): Promise<void>
+  getLikedIds(): Promise<string[]>
 
   playTrack(context: PlayContext): Promise<void>
-  playPlaylist(playlist: Playlist): Promise<void>
   resume(): Promise<void>
   pause(): Promise<void>
   next(): Promise<void>
   previous(): Promise<void>
   seek(positionMs: number): Promise<void>
+
   setVolume(volume: number): Promise<void>
+  getEq(): Promise<EqStatus>
+  setEq(state: EqState): Promise<EqStatus>
+  /** Call once all listeners are registered; starts state, volume and audio updates. */
+  ready(): Promise<void>
 
   onState(callback: (state: PlaybackState | null) => void): () => void
+  onVolume(callback: (volume: SystemVolume) => void): () => void
+  onPcm(callback: (chunk: PcmChunk) => void): () => void
+  onLiked(callback: (ids: string[]) => void): () => void
   onError(callback: (message: string) => void): () => void
-  onProviders(callback: (providers: ProviderInfo[]) => void): () => void
 
   windowControl(action: 'minimize' | 'close'): void
 }

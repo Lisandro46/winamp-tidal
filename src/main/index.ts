@@ -28,8 +28,8 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  const registry = registerIpc(window)
-  window.on('closed', () => registry.dispose())
+  const dispose = registerIpc(window)
+  window.on('closed', dispose)
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL)

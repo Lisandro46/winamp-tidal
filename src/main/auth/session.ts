@@ -1,6 +1,7 @@
 import { login, refresh, type OAuthConfig, type TokenSet } from './oauthPkce'
 import { tokenStore } from './store'
-import { ProviderError } from '../providers/provider'
+
+export class ApiError extends Error {}
 
 /** Holds a provider's tokens and performs authorized JSON requests, refreshing as needed. */
 export class OAuthSession {
@@ -32,7 +33,7 @@ export class OAuthSession {
   }
 
   private async accessToken(): Promise<string> {
-    if (!this.tokens) throw new ProviderError('Not logged in')
+    if (!this.tokens) throw new ApiError('Not logged in')
     if (Date.now() < this.tokens.expiresAt) return this.tokens.accessToken
     this.refreshing ??= refresh(this.config(), this.tokens).finally(() => {
       this.refreshing = undefined
@@ -41,7 +42,7 @@ export class OAuthSession {
       this.save(await this.refreshing)
     } catch (error) {
       this.save(undefined)
-      throw new ProviderError(`Session expired, please reconnect (${(error as Error).message})`)
+      throw new ApiError(`Session expired, please reconnect (${(error as Error).message})`)
     }
     return this.tokens!.accessToken
   }
@@ -52,7 +53,7 @@ export class OAuthSession {
       fetch(url, {
         ...init,
         headers: {
-          ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(init.body ? { 'Content-Type': 'application/vnd.api+json' } : {}),
           ...init.headers,
           Authorization: `Bearer ${await this.accessToken()}`
         }
@@ -71,7 +72,7 @@ export class OAuthSession {
     }
     if (!response.ok) {
       const text = await response.text()
-      throw new ProviderError(`${response.status} ${response.statusText}: ${text.slice(0, 300)}`)
+      throw new ApiError(`${response.status} ${response.statusText}: ${text.slice(0, 300)}`)
     }
     const text = await response.text()
     return text ? (JSON.parse(text) as T) : undefined

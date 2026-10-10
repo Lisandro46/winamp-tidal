@@ -1,6 +1,6 @@
 import Webamp from 'webamp'
 import './styles/app.css'
-import { RemoteMedia } from './webamp/RemoteMedia'
+import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
 import { LibraryPanel } from './ui/LibraryPanel'
 
@@ -60,15 +60,20 @@ async function main(): Promise<void> {
   })
   webamp.onMinimize(() => window.remote.windowControl('minimize'))
 
-  const controller = new RemoteController(webamp)
+  let library: LibraryPanel | undefined
+  const controller = new RemoteController(webamp, (status) => library?.setEqStatus(status))
   window.remote.onState((state) => controller.applyState(state))
+  window.remote.onVolume((volume) => controller.applyVolume(volume))
+  window.remote.onPcm((chunk) => getRemoteMedia()?.feedPcm(chunk))
   window.remote.onError((message) => showToast(message))
 
   setupTitlebar(webamp)
   await webamp.renderInto($('#stage'))
+  controller.restoreEq(settings.eq)
 
-  const library = new LibraryPanel($('#library'), controller)
+  library = new LibraryPanel($('#library'), controller)
   await library.init()
+  await window.remote.ready()
 }
 
 void main()

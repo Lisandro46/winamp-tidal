@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { EventEmitter } from 'node:events'
 import { app } from 'electron'
+import type { PcmChunk, SystemVolume } from '@shared/types'
 
 /** A Windows media session (any app integrated with the system media controls). */
 export interface SmtcSession {
@@ -19,13 +20,29 @@ export interface SmtcSession {
   thumbnail?: string
 }
 
-export type SmtcTarget = 'tidal' | 'spotify' | 'any'
-export type SmtcCommand = 'play' | 'pause' | 'toggle' | 'stop' | 'next' | 'previous' | 'seek'
+export type SmtcTarget = 'tidal' | 'any'
+export type SmtcCommand =
+  | 'play'
+  | 'pause'
+  | 'toggle'
+  | 'stop'
+  | 'next'
+  | 'previous'
+  | 'seek'
+  | 'setVolume'
+  | 'getVolume'
+  | 'visualizer'
 
 interface SessionsMessage {
   type: 'sessions'
   current?: string
   sessions: SmtcSession[]
+}
+interface VolumeMessage extends SystemVolume {
+  type: 'volume'
+}
+interface PcmMessage extends PcmChunk {
+  type: 'pcm'
 }
 interface ResultMessage {
   type: 'result'
@@ -46,7 +63,6 @@ const helperPath = (): string => {
 export function matchesTarget(session: SmtcSession, target: SmtcTarget): boolean {
   const id = session.appId.toLowerCase()
   if (target === 'tidal') return id.includes('tidal') || id.includes('wimpmusic')
-  if (target === 'spotify') return id.includes('spotify')
   return true
 }
 
@@ -56,6 +72,7 @@ class SmtcClient extends EventEmitter {
   private nextId = 1
   private pending = new Map<number, (result: ResultMessage) => void>()
   private latest: SessionsMessage = { type: 'sessions', sessions: [] }
+  private visualizerOn = false
 
   private ensureRunning(): ChildProcessWithoutNullStreams {
     if (this.child && this.child.exitCode == null) return this.child
@@ -70,11 +87,13 @@ class SmtcClient extends EventEmitter {
     })
     createInterface({ input: child.stdout }).on('line', (line) => this.handleLine(line))
     this.child = child
+    // A restarted helper must resume the capture the UI asked for.
+    if (this.visualizerOn) child.stdin.write(JSON.stringify({ cmd: 'visualizer', enabled: true }) + '\n')
     return child
   }
 
   private handleLine(line: string): void {
-    let message: SessionsMessage | ResultMessage
+    let message: SessionsMessage | ResultMessage | VolumeMessage | PcmMessage
     try {
       message = JSON.parse(line)
     } catch {
@@ -83,6 +102,10 @@ class SmtcClient extends EventEmitter {
     if (message.type === 'sessions') {
       this.latest = message
       this.emit('sessions', message)
+    } else if (message.type === 'volume') {
+      this.emit('volume', { volume: message.volume, muted: message.muted, device: message.device })
+    } else if (message.type === 'pcm') {
+      this.emit('pcm', { rate: message.rate, data: message.data })
     } else if (message.type === 'result') {
       this.pending.get(message.id)?.(message)
       this.pending.delete(message.id)
@@ -106,7 +129,31 @@ class SmtcClient extends EventEmitter {
     return () => this.off('sessions', listener)
   }
 
-  async send(cmd: SmtcCommand, target: SmtcTarget, extra: { positionMs?: number } = {}): Promise<void> {
+  onVolume(listener: (volume: SystemVolume) => void): () => void {
+    this.on('volume', listener)
+    void this.send('getVolume', 'any').catch(() => undefined)
+    return () => this.off('volume', listener)
+  }
+
+  onPcm(listener: (chunk: PcmChunk) => void): () => void {
+    this.on('pcm', listener)
+    return () => this.off('pcm', listener)
+  }
+
+  setVisualizer(enabled: boolean): Promise<void> {
+    this.visualizerOn = enabled
+    return this.send('visualizer', 'any', { enabled })
+  }
+
+  setVolume(volume: number): Promise<void> {
+    return this.send('setVolume', 'any', { volume: Math.round(volume) })
+  }
+
+  async send(
+    cmd: SmtcCommand,
+    target: SmtcTarget,
+    extra: { positionMs?: number; volume?: number; enabled?: boolean } = {}
+  ): Promise<void> {
     const child = this.ensureRunning()
     const id = this.nextId++
     const result = await new Promise<ResultMessage>((resolve) => {

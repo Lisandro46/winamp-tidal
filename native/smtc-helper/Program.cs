@@ -1,9 +1,13 @@
-// SMTC helper: bridges Windows' GlobalSystemMediaTransportControls to the Electron app.
+// Windows bridge for the Electron app: media session control (SMTC), system
+// volume and loopback audio for the visualizer.
 //
 // Protocol (one JSON object per line):
-//   stdin  <- {"id":1,"cmd":"play|pause|toggle|next|previous|seek|stop","target":"tidal|spotify|any","positionMs":1234}
+//   stdin  <- {"id":1,"cmd":"play|pause|toggle|next|previous|seek|stop","target":"tidal|any","positionMs":1234}
+//   stdin  <- {"id":2,"cmd":"setVolume","volume":40} | {"cmd":"getVolume"} | {"cmd":"visualizer","enabled":true}
 //   stdout -> {"type":"result","id":1,"ok":true,"error":null}
 //   stdout -> {"type":"sessions","sessions":[{...}]}   (on change and every second)
+//   stdout -> {"type":"volume","volume":40,"muted":false,"device":"Speakers"}   (on change)
+//   stdout -> {"type":"pcm","rate":24000,"data":"<base64 mono int16>"}   (while the visualizer is on)
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -32,11 +36,17 @@ void Emit(object message)
 // Diagnostics go to stderr so they never corrupt the JSON stream on stdout.
 static bool LogError(Exception error)
 {
-    Console.Error.WriteLine(error.ToString());
+    // RPC_E_WRONG_THREAD is transient with WinRT media sessions and is retried by the caller.
+    const int RpcWrongThread = unchecked((int)0x8001010E);
+    if (error.HResult != RpcWrongThread)
+    {
+        Console.Error.WriteLine($"{error.GetType().Name}: {error.Message}");
+    }
     return true;
 }
 
 var manager = await MediaManager.RequestAsync();
+using var audio = new AudioServices(Emit);
 
 // Thumbnails are expensive to read, so cache the last one per session+track.
 var thumbnailCache = new Dictionary<string, string?>();
@@ -129,7 +139,13 @@ async Task EmitSessions()
     var sessions = new List<object>();
     foreach (var session in manager.GetSessions())
     {
+        // WinRT occasionally throws RPC_E_WRONG_THREAD right after startup; one retry is enough.
         var described = await DescribeSession(session);
+        if (described == null)
+        {
+            await Task.Delay(50);
+            described = await DescribeSession(session);
+        }
         if (described != null) sessions.Add(described);
     }
     Emit(new { type = "sessions", current = current?.SourceAppUserModelId, sessions });
@@ -169,10 +185,20 @@ async Task<(bool ok, string? error)> RunCommand(JsonElement command)
     var cmd = command.GetProperty("cmd").GetString() ?? "";
     var target = command.TryGetProperty("target", out var t) ? t.GetString() ?? "any" : "any";
 
-    if (cmd == "list")
+    switch (cmd)
     {
-        await EmitSessions();
-        return (true, null);
+        case "list":
+            await EmitSessions();
+            return (true, null);
+        case "setVolume":
+            audio.SetVolume(command.GetProperty("volume").GetInt32());
+            return (true, null);
+        case "getVolume":
+            audio.PollVolume(force: true);
+            return (true, null);
+        case "visualizer":
+            audio.SetVisualizer(command.GetProperty("enabled").GetBoolean());
+            return (true, null);
     }
 
     var session = FindSession(target);
@@ -201,6 +227,17 @@ _ = Task.Run(async () =>
     {
         await SafeEmitSessions();
         await Task.Delay(1000);
+    }
+});
+
+// System volume has no cheap change event without COM callbacks, so poll it.
+_ = Task.Run(async () =>
+{
+    for (var tick = 0; ; tick++)
+    {
+        audio.PollVolume();
+        if (tick % 8 == 0) audio.CheckDevice();
+        await Task.Delay(250);
     }
 });
 

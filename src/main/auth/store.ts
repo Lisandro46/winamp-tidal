@@ -42,7 +42,7 @@ export const tokenStore = {
   }
 }
 
-const DEFAULT_SETTINGS: AppSettings = { provider: 'system' }
+const DEFAULT_SETTINGS: AppSettings = {}
 
 export const settingsStore = {
   get(): AppSettings {

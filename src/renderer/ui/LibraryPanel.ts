@@ -1,10 +1,22 @@
-import type { PlaybackState, Playlist, ProviderId, ProviderInfo, Track } from '@shared/types'
+import type { AuthInfo, Collection, EqStatus, PlaybackState, SearchResults, Track } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
+
+type Section = 'mixes' | 'playlists' | 'albums' | 'artists'
 
 type View =
   | { kind: 'liked' }
+  | { kind: 'section'; section: Section }
+  | { kind: 'collection'; collection: Collection }
   | { kind: 'search'; query: string }
-  | { kind: 'playlist'; playlist: Playlist }
+
+const SECTIONS: { section: Section; label: string; load: () => Promise<Collection[]> }[] = [
+  { section: 'mixes', label: 'Mixes para vos', load: () => window.remote.getMixes() },
+  { section: 'playlists', label: 'Playlists', load: () => window.remote.getPlaylists() },
+  { section: 'albums', label: 'Álbumes', load: () => window.remote.getAlbums() },
+  { section: 'artists', label: 'Artistas', load: () => window.remote.getArtists() }
+]
+
+const EQ_APO_URL = 'https://sourceforge.net/projects/equalizerapo/'
 
 const formatDuration = (ms: number): string => {
   const total = Math.round(ms / 1000)
@@ -13,124 +25,345 @@ const formatDuration = (ms: number): string => {
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> & { dataset?: Record<string, string> } = {},
+  props: Partial<HTMLElementTagNameMap[K]> = {},
   ...children: (Node | string)[]
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag)
-  const { dataset, ...rest } = props
-  Object.assign(node, rest)
-  if (dataset) Object.assign(node.dataset, dataset)
+  Object.assign(node, props)
   node.append(...children)
   return node
 }
 
-/** Winamp "Media Library"-style window: provider picker, playlists, liked songs and search. */
-export class LibraryPanel {
-  private providers: ProviderInfo[] = []
-  private active: ProviderId = 'system'
-  private playlists: Playlist[] = []
-  private view: View | undefined
-  private tracks: Track[] = []
-  private loadToken = 0
+const sameView = (a: View | undefined, b: View): boolean => JSON.stringify(a) === JSON.stringify(b)
 
-  private providerBar = el('div', { className: 'ml-providers' })
+/** Winamp "Media Library"-style window for the TIDAL library. */
+export class LibraryPanel {
+  private auth: AuthInfo = { configured: false, connected: false }
+  private eq: EqStatus = { installed: false }
+  private liked = new Set<string>()
+  private history: View[] = []
+  private cache = new Map<string, Collection[] | Track[]>()
+  private loadToken = 0
+  private nowPlayingTrackId: string | undefined
+
   private status = el('div', { className: 'ml-status' })
   private nav = el('nav', { className: 'ml-nav' })
-  private listTitle = el('div', { className: 'ml-list-title' })
-  private listActions = el('div', { className: 'ml-list-actions' })
-  private trackTable = el('div', { className: 'ml-tracks', tabIndex: 0 })
-  private searchInput = el('input', { type: 'search', placeholder: 'Buscar canciones…', className: 'ml-search' })
+  private back = el('button', { className: 'ml-back', textContent: '◂', title: 'Volver' })
+  private title = el('div', { className: 'ml-list-title' })
+  private actions = el('div', { className: 'ml-list-actions' })
+  private content = el('div', { className: 'ml-content', tabIndex: 0 })
+  private search = el('input', { type: 'search', placeholder: 'Buscar en TIDAL…', className: 'ml-search' })
   private body = el('div', { className: 'ml-body' })
   private nowPlaying = el('div', { className: 'ml-now' })
 
   constructor(
-    private readonly root: HTMLElement,
+    root: HTMLElement,
     private readonly controller: RemoteController
   ) {
-    root.append(
-      el('div', { className: 'ml-titlebar' }, 'WINAMP MEDIA LIBRARY'),
-      this.providerBar,
-      this.status,
-      this.body,
-      this.nowPlaying
-    )
+    root.append(el('div', { className: 'ml-titlebar' }, 'WINAMP MEDIA LIBRARY · TIDAL'), this.status, this.body, this.nowPlaying)
     this.body.append(
-      el('div', { className: 'ml-side' }, this.searchInput, this.nav),
+      el('div', { className: 'ml-side' }, this.search, this.nav),
       el(
         'section',
         { className: 'ml-main' },
-        el('div', { className: 'ml-list-header' }, this.listTitle, this.listActions),
-        this.trackTable
+        el('div', { className: 'ml-list-header' }, this.back, this.title, this.actions),
+        this.content
       )
     )
-    window.remote.onState((state) => this.renderNowPlaying(state))
-    this.renderNowPlaying(null)
-    this.searchInput.addEventListener('keydown', (event) => {
-      const query = this.searchInput.value.trim()
+    this.back.onclick = () => this.goBack()
+    this.search.addEventListener('keydown', (event) => {
+      const query = this.search.value.trim()
       if (event.key === 'Enter' && query) void this.open({ kind: 'search', query })
     })
-    window.remote.onProviders((providers) => {
-      this.providers = providers
-      this.renderProviders()
+    window.remote.onState((state) => this.renderNowPlaying(state))
+    window.remote.onLiked((ids) => {
+      this.liked = new Set(ids)
+      this.refreshHearts()
     })
     document.addEventListener('library:toggle', () => root.classList.toggle('hidden'))
+    this.renderNowPlaying(null)
   }
 
   async init(): Promise<void> {
-    const [providers, settings] = await Promise.all([window.remote.listProviders(), window.remote.getSettings()])
-    this.providers = providers
-    this.active = settings.provider
-    this.renderProviders()
-    await this.loadLibrary()
+    const [auth, eq, liked] = await Promise.all([
+      window.remote.getAuth(),
+      window.remote.getEq(),
+      window.remote.getLikedIds()
+    ])
+    this.auth = auth
+    this.eq = eq
+    this.liked = new Set(liked)
+    this.renderStatus()
+    this.renderNav()
+    if (auth.connected) await this.open({ kind: 'liked' })
+    else this.renderWelcome()
   }
 
-  private get activeInfo(): ProviderInfo | undefined {
-    return this.providers.find((p) => p.id === this.active)
+  setEqStatus(eq: EqStatus): void {
+    this.eq = eq
+    this.renderStatus()
   }
 
-  // ---- Providers ---------------------------------------------------------
+  // ---- Status bar ------------------------------------------------------------
 
-  private renderProviders(): void {
-    this.providerBar.replaceChildren(
-      ...this.providers.map((provider) =>
-        el('button', {
-          className: `ml-provider ${provider.id === this.active ? 'active' : ''}`,
-          textContent: provider.name,
-          title: provider.connected ? 'Conectado' : 'No conectado',
-          onclick: () => void this.selectProvider(provider.id)
-        })
-      )
-    )
-
-    const info = this.activeInfo
-    if (!info) return
-    const parts: (Node | string)[] = []
-    if (info.setupHint) {
-      parts.push(el('span', { className: 'ml-warn' }, `⚠ ${info.setupHint}`))
-    } else if (info.id === 'system') {
-      parts.push('Controla el reproductor activo de Windows (sin biblioteca).')
-    } else if (info.connected) {
-      parts.push(
-        el('span', { className: 'ml-ok' }, '● Conectado'),
+  private renderStatus(): void {
+    const tidal: (Node | string)[] = []
+    if (!this.auth.configured) {
+      tidal.push(el('span', { className: 'ml-warn' }, `⚠ ${this.auth.hint ?? 'TIDAL sin configurar'}`))
+    } else if (this.auth.connected) {
+      tidal.push(
+        el('span', { className: 'ml-ok' }, '● TIDAL conectado'),
         el('button', { textContent: 'Desconectar', onclick: () => void this.connect(false) })
       )
     } else {
-      parts.push(
-        el('span', {}, 'Sin conectar  '),
-        el('button', { textContent: `Conectar ${info.name}`, onclick: () => void this.connect(true) })
+      tidal.push(el('button', { textContent: 'Conectar TIDAL', onclick: () => void this.connect(true) }))
+    }
+
+    const eq: (Node | string)[] = this.eq.error
+      ? [el('span', { className: 'ml-warn', title: this.eq.error }, '⚠ EQ sin permisos')]
+      : this.eq.installed
+        ? [el('span', { className: 'ml-ok', title: this.eq.configDir ?? '' }, '● EQ activo')]
+        : [
+            el('a', {
+              href: EQ_APO_URL,
+              target: '_blank',
+              textContent: 'Instalar Equalizer APO',
+              title: 'Necesario para que el ecualizador del Winamp suene'
+            })
+          ]
+
+    this.status.replaceChildren(
+      el('div', { className: 'ml-status-group' }, ...tidal),
+      el('div', { className: 'ml-status-group' }, ...eq)
+    )
+  }
+
+  private async connect(connect: boolean): Promise<void> {
+    this.status.replaceChildren(connect ? 'Abriendo el login de TIDAL en el navegador…' : 'Desconectando…')
+    try {
+      this.auth = await (connect ? window.remote.connect() : window.remote.disconnect())
+    } catch {
+      this.auth = await window.remote.getAuth()
+    }
+    this.cache.clear()
+    this.history = []
+    this.renderStatus()
+    this.renderNav()
+    if (this.auth.connected) await this.open({ kind: 'liked' })
+    else this.renderWelcome()
+  }
+
+  // ---- Navigation --------------------------------------------------------------
+
+  private get view(): View | undefined {
+    return this.history[this.history.length - 1]
+  }
+
+  private renderNav(): void {
+    this.body.classList.toggle('disconnected', !this.auth.connected)
+    this.search.disabled = !this.auth.connected
+    const item = (label: string, view: View): HTMLElement =>
+      el('div', {
+        className: `ml-nav-item ${sameView(this.view, view) ? 'selected' : ''}`,
+        textContent: label,
+        onclick: () => void this.open(view, true)
+      })
+    this.nav.replaceChildren(
+      item('♥ Temas favoritos', { kind: 'liked' }),
+      ...SECTIONS.map(({ section, label }) => item(label, { kind: 'section', section }))
+    )
+  }
+
+  private renderWelcome(): void {
+    this.history = []
+    this.title.textContent = ''
+    this.actions.replaceChildren()
+    this.back.hidden = true
+    this.content.replaceChildren(
+      el(
+        'div',
+        { className: 'ml-empty' },
+        this.auth.configured
+          ? 'Conectá TIDAL para ver tus favoritos, mixes, playlists, álbumes y artistas. Los controles del Winamp ya funcionan sin conectar.'
+          : 'Configurá el client id de TIDAL en .env (ver README). Los controles del Winamp ya funcionan.'
+      )
+    )
+  }
+
+  private goBack(): void {
+    if (this.history.length < 2) return
+    this.history.pop()
+    const previous = this.history.pop()!
+    void this.open(previous)
+  }
+
+  private async open(view: View, root = false): Promise<void> {
+    if (root) this.history = []
+    if (!sameView(this.view, view)) this.history.push(view)
+    this.back.hidden = this.history.length < 2
+    this.renderNav()
+    const token = ++this.loadToken
+    const stale = (): boolean => token !== this.loadToken
+
+    this.actions.replaceChildren()
+    this.content.replaceChildren(el('div', { className: 'ml-empty' }, 'Cargando…'))
+    try {
+      if (view.kind === 'liked') {
+        this.title.textContent = '♥ Temas favoritos'
+        const tracks = await this.cached('liked', () => window.remote.getLikedTracks())
+        if (!stale()) this.showTracks(tracks as Track[])
+      } else if (view.kind === 'section') {
+        const section = SECTIONS.find((s) => s.section === view.section)!
+        this.title.textContent = section.label
+        const collections = await this.cached(view.section, section.load)
+        if (!stale()) this.showCollections(collections as Collection[])
+      } else if (view.kind === 'collection') {
+        const { collection } = view
+        this.title.textContent = collection.subtitle ? `${collection.name} — ${collection.subtitle}` : collection.name
+        const tracks = await this.cached(`${collection.kind}:${collection.id}`, () =>
+          window.remote.getTracks(collection)
+        )
+        if (!stale()) this.showTracks(tracks as Track[])
+      } else {
+        this.title.textContent = `Búsqueda: ${view.query}`
+        const results = await window.remote.search(view.query)
+        if (!stale()) this.showSearch(results)
+      }
+    } catch {
+      if (!stale()) this.content.replaceChildren(el('div', { className: 'ml-empty' }, 'No se pudo cargar'))
+    }
+  }
+
+  private async cached<T extends Collection[] | Track[]>(key: string, load: () => Promise<T>): Promise<T> {
+    if (!this.cache.has(key)) this.cache.set(key, await load())
+    return this.cache.get(key) as T
+  }
+
+  // ---- Rendering -----------------------------------------------------------------
+
+  private heart(trackId: string | undefined): HTMLElement {
+    const liked = trackId != null && this.liked.has(trackId)
+    return el('button', {
+      className: `ml-heart ${liked ? 'liked' : ''}`,
+      textContent: liked ? '♥' : '♡',
+      title: liked ? 'Quitar de favoritos' : 'Agregar a favoritos',
+      disabled: trackId == null || !this.auth.connected,
+      onclick: (event: MouseEvent) => {
+        event.stopPropagation()
+        if (!trackId) return
+        this.cache.delete('liked')
+        void window.remote.setLiked(trackId, !liked).catch(() => undefined)
+      }
+    })
+  }
+
+  private refreshHearts(): void {
+    for (const row of this.content.querySelectorAll<HTMLElement>('[data-track-id]')) {
+      row.querySelector('.ml-heart')?.replaceWith(this.heart(row.dataset.trackId))
+    }
+    this.nowPlaying.querySelector('.ml-heart')?.replaceWith(this.heart(this.nowPlayingTrackId))
+  }
+
+  private trackRows(tracks: Track[]): HTMLElement[] {
+    return tracks.map((track, index) => {
+      const row = el(
+        'div',
+        {
+          className: 'ml-track',
+          title: 'Doble click para reproducir',
+          ondblclick: () => this.controller.loadList(tracks, index)
+        },
+        el('span', { className: 'n' }, String(index + 1)),
+        this.heart(track.id),
+        el('span', { className: 't' }, track.title),
+        el('span', { className: 'a' }, track.artist),
+        el('span', { className: 'd' }, formatDuration(track.durationMs))
+      )
+      row.dataset.trackId = track.id
+      return row
+    })
+  }
+
+  private showTracks(tracks: Track[]): void {
+    if (tracks.length) {
+      this.actions.replaceChildren(
+        el('button', { textContent: '▶ Reproducir', onclick: () => this.controller.loadList(tracks, 0) }),
+        el('button', {
+          textContent: '⤮ Aleatorio',
+          onclick: () => {
+            const shuffled = [...tracks].sort(() => Math.random() - 0.5)
+            this.controller.loadList(shuffled, 0)
+          }
+        }),
+        el('button', { textContent: '+ Enviar al Winamp', onclick: () => this.controller.loadList(tracks) })
       )
     }
-    this.status.replaceChildren(...parts)
+    this.content.replaceChildren(
+      ...(tracks.length ? this.trackRows(tracks) : [el('div', { className: 'ml-empty' }, 'Vacío')])
+    )
+  }
+
+  private collectionRows(collections: Collection[]): HTMLElement[] {
+    return collections.map((collection) =>
+      el(
+        'div',
+        {
+          className: 'ml-collection',
+          onclick: () => void this.open({ kind: 'collection', collection })
+        },
+        collection.artworkUrl
+          ? el('img', { src: collection.artworkUrl, alt: '', loading: 'lazy' })
+          : el('div', { className: 'ml-cover-placeholder' }, '♫'),
+        el(
+          'div',
+          { className: 'ml-collection-text' },
+          el('div', { className: 'name' }, collection.name),
+          el(
+            'div',
+            { className: 'sub' },
+            [collection.subtitle, collection.trackCount != null ? `${collection.trackCount} temas` : '']
+              .filter(Boolean)
+              .join(' · ')
+          )
+        )
+      )
+    )
+  }
+
+  private showCollections(collections: Collection[]): void {
+    this.content.replaceChildren(
+      ...(collections.length
+        ? this.collectionRows(collections)
+        : [el('div', { className: 'ml-empty' }, 'Nada por acá todavía')])
+    )
+  }
+
+  private showSearch(results: SearchResults): void {
+    const groups: [string, HTMLElement[]][] = [
+      ['TEMAS', this.trackRows(results.tracks)],
+      ['ÁLBUMES', this.collectionRows(results.albums)],
+      ['ARTISTAS', this.collectionRows(results.artists)],
+      ['PLAYLISTS', this.collectionRows(results.playlists)]
+    ]
+    const nodes = groups
+      .filter(([, rows]) => rows.length)
+      .flatMap(([label, rows]) => [el('div', { className: 'ml-group' }, label), ...rows])
+    if (results.tracks.length) {
+      this.actions.replaceChildren(
+        el('button', { textContent: '▶ Reproducir temas', onclick: () => this.controller.loadList(results.tracks, 0) })
+      )
+    }
+    this.content.replaceChildren(...(nodes.length ? nodes : [el('div', { className: 'ml-empty' }, 'Sin resultados')]))
   }
 
   private renderNowPlaying(state: PlaybackState | null): void {
+    this.nowPlayingTrackId = state?.trackId
     if (!state) {
-      this.nowPlaying.replaceChildren(el('div', { className: 'ml-now-empty' }, 'Nada sonando'))
+      this.nowPlaying.replaceChildren(el('div', { className: 'ml-now-empty' }, 'TIDAL no está reproduciendo'))
       return
     }
-    const art = this.nowPlaying.querySelector('img')
-    const image =
-      art?.src === state.artworkUrl && art ? art : el('img', { src: state.artworkUrl ?? '', alt: '' })
+    const current = this.nowPlaying.querySelector('img')
+    const image = current && current.src === state.artworkUrl ? current : el('img', { src: state.artworkUrl ?? '', alt: '' })
     image.hidden = !state.artworkUrl
     this.nowPlaying.replaceChildren(
       image,
@@ -139,158 +372,9 @@ export class LibraryPanel {
         { className: 'ml-now-text' },
         el('div', { className: 'ml-now-title' }, state.title),
         el('div', {}, state.artist),
-        el('div', { className: 'ml-now-dim' }, [state.album, state.device && `en ${state.device}`].filter(Boolean).join(' · '))
-      )
-    )
-  }
-
-  private async selectProvider(id: ProviderId): Promise<void> {
-    if (id === this.active) return
-    this.active = id
-    await window.remote.selectProvider(id)
-    this.controller.clearList()
-    this.renderProviders()
-    await this.loadLibrary()
-  }
-
-  private async connect(connect: boolean): Promise<void> {
-    const info = this.activeInfo
-    if (!info) return
-    this.status.replaceChildren(connect ? 'Abriendo el login en el navegador…' : 'Desconectando…')
-    try {
-      await (connect ? window.remote.connect(info.id) : window.remote.disconnect(info.id))
-    } catch {
-      // error already shown by the toast
-    }
-    this.providers = await window.remote.listProviders()
-    this.renderProviders()
-    await this.loadLibrary()
-  }
-
-  // ---- Library -----------------------------------------------------------
-
-  private async loadLibrary(): Promise<void> {
-    const info = this.activeInfo
-    const usable = !!info?.capabilities.library && info.connected
-    this.body.hidden = !usable
-    this.playlists = []
-    this.view = undefined
-    this.renderNav()
-    this.renderTracks([], usable ? 'Elegí una playlist' : '')
-    if (!usable) return
-    try {
-      this.playlists = await window.remote.getPlaylists()
-    } catch {
-      this.playlists = []
-    }
-    this.renderNav()
-  }
-
-  private renderNav(): void {
-    const info = this.activeInfo
-    if (!info?.capabilities.library || !info.connected) {
-      this.nav.replaceChildren()
-      return
-    }
-    const item = (label: string, view: View, selected: boolean, title = ''): HTMLElement =>
-      el('div', {
-        className: `ml-nav-item ${selected ? 'selected' : ''}`,
-        textContent: label,
-        title,
-        onclick: () => void this.open(view)
-      })
-    const current = this.view
-    this.nav.replaceChildren(
-      item('♥ Me gusta', { kind: 'liked' }, current?.kind === 'liked'),
-      el('div', { className: 'ml-nav-heading' }, `PLAYLISTS (${this.playlists.length})`),
-      ...this.playlists.map((playlist) =>
-        item(
-          playlist.name,
-          { kind: 'playlist', playlist },
-          current?.kind === 'playlist' && current.playlist.id === playlist.id,
-          playlist.trackCount != null ? `${playlist.trackCount} temas` : ''
-        )
-      )
-    )
-  }
-
-  private async open(view: View): Promise<void> {
-    this.view = view
-    this.renderNav()
-    const token = ++this.loadToken
-    const title =
-      view.kind === 'liked' ? 'Me gusta' : view.kind === 'search' ? `Búsqueda: ${view.query}` : view.playlist.name
-
-    if (view.kind === 'playlist' && !view.playlist.tracksListable) {
-      this.tracks = []
-      this.renderTracks([], title, 'Spotify no permite listar playlists que no son tuyas, pero se pueden reproducir.')
-      return
-    }
-
-    this.renderTracks([], title, 'Cargando…')
-    try {
-      const tracks =
-        view.kind === 'liked'
-          ? await window.remote.getLikedTracks()
-          : view.kind === 'search'
-            ? await window.remote.search(view.query)
-            : await window.remote.getPlaylistTracks(view.playlist.id)
-      if (token !== this.loadToken) return
-      this.tracks = tracks
-      this.renderTracks(tracks, title, tracks.length ? undefined : 'Sin resultados')
-    } catch {
-      if (token === this.loadToken) this.renderTracks([], title, 'No se pudo cargar')
-    }
-  }
-
-  private playlistOfView(): Playlist | undefined {
-    return this.view?.kind === 'playlist' ? this.view.playlist : undefined
-  }
-
-  private renderTracks(tracks: Track[], title: string, message?: string): void {
-    this.listTitle.textContent = title
-    const playlist = this.playlistOfView()
-    const actions: HTMLElement[] = []
-    if (tracks.length) {
-      actions.push(
-        el('button', {
-          textContent: '▶ Reproducir',
-          onclick: () => this.controller.loadList(tracks, playlist, 0)
-        }),
-        el('button', {
-          textContent: '+ A la playlist de Winamp',
-          onclick: () => this.controller.loadList(tracks, playlist)
-        })
-      )
-    } else if (playlist && !playlist.tracksListable) {
-      actions.push(
-        el('button', {
-          textContent: '▶ Reproducir playlist',
-          onclick: () => void window.remote.playPlaylist(playlist).catch(() => undefined)
-        })
-      )
-    }
-    this.listActions.replaceChildren(...actions)
-
-    if (message) {
-      this.trackTable.replaceChildren(el('div', { className: 'ml-empty' }, message))
-      return
-    }
-    this.trackTable.replaceChildren(
-      ...tracks.map((track, index) =>
-        el(
-          'div',
-          {
-            className: 'ml-track',
-            title: 'Doble click para reproducir',
-            ondblclick: () => this.controller.loadList(tracks, playlist, index)
-          },
-          el('span', { className: 'n' }, String(index + 1)),
-          el('span', { className: 't' }, track.title),
-          el('span', { className: 'a' }, track.artist),
-          el('span', { className: 'd' }, formatDuration(track.durationMs))
-        )
-      )
+        el('div', { className: 'ml-now-dim' }, state.album ?? '')
+      ),
+      this.heart(state.trackId)
     )
   }
 }

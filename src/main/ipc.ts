@@ -1,66 +1,111 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { PlayContext, Playlist, ProviderId } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext } from '@shared/types'
 import { settingsStore } from './auth/store'
-import { ProviderRegistry } from './providers/registry'
+import { Equalizer } from './audio/equalizer'
+import { smtc } from './smtc/helperClient'
+import { TidalApi } from './tidal/api'
+import { TidalPlayer } from './tidal/player'
 
-/** Wires the renderer's `window.remote` API to the provider registry. */
-export function registerIpc(window: BrowserWindow): ProviderRegistry {
+/** Wires the renderer's `window.remote` API to TIDAL, the Windows helper and the equalizer. */
+export function registerIpc(window: BrowserWindow): () => void {
   const send = (channel: string, payload: unknown): void => {
     if (!window.isDestroyed()) window.webContents.send(channel, payload)
   }
-  const registry = new ProviderRegistry((state) => send('remote:state', state))
+  const api = new TidalApi()
+  const player = new TidalPlayer(api, (ids) => send('remote:liked', ids))
+  const equalizer = new Equalizer()
+
+  const auth = (): AuthInfo => ({
+    configured: api.configured,
+    connected: api.connected,
+    hint: api.configured ? undefined : 'Falta MAIN_VITE_TIDAL_CLIENT_ID en .env (ver README)'
+  })
 
   // Every handler reports failures to the UI as well as rejecting the call.
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R> | R): void => {
-    ipcMain.handle(channel, async (_event, ...args) => {
+    ipcMain.handle(`remote:${channel}`, async (_event, ...args) => {
       try {
         return await fn(...(args as A))
       } catch (error) {
-        const message = (error as Error).message
-        send('remote:error', message)
+        send('remote:error', (error as Error).message)
         throw error
       }
     })
   }
+  const library =
+    <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      await api.ensureConnected()
+      return fn(...args)
+    }
 
-  handle('remote:listProviders', () => registry.list())
-  handle('remote:getSettings', () => settingsStore.get())
-  handle('remote:selectProvider', (id: ProviderId) => registry.select(id))
-  handle('remote:connect', async (id: ProviderId) => {
-    await registry.get(id).connect()
-    if (registry.active.id === id) registry.restartWatch()
-    send('remote:providers', registry.list())
-    return registry.info(id)
+  handle('getAuth', auth)
+  handle('connect', async () => {
+    await api.login()
+    await player.loadLiked()
+    return auth()
   })
-  handle('remote:disconnect', async (id: ProviderId) => {
-    await registry.get(id).disconnect()
-    if (registry.active.id === id) registry.restartWatch()
-    send('remote:providers', registry.list())
-    return registry.info(id)
+  handle('disconnect', async () => {
+    api.logout()
+    await player.loadLiked()
+    return auth()
   })
-  handle('remote:setSkin', (url: string | undefined) => {
+  handle('getSettings', () => settingsStore.get())
+  handle('setSkin', (url: string | undefined) => {
     settingsStore.update({ skinUrl: url })
   })
 
-  handle('remote:getPlaylists', () => registry.active.getPlaylists())
-  handle('remote:getPlaylistTracks', (id: string) => registry.active.getPlaylistTracks(id))
-  handle('remote:getLikedTracks', () => registry.active.getLikedTracks())
-  handle('remote:search', (query: string) => registry.active.search(query))
+  handle('getLikedTracks', library(() => api.likedTracks()))
+  handle('getPlaylists', library(() => api.userPlaylists()))
+  handle('getMixes', library(() => api.mixes()))
+  handle('getAlbums', library(() => api.userAlbums()))
+  handle('getArtists', library(() => api.userArtists()))
+  handle('getTracks', library((collection: Collection) => api.collectionTracks(collection)))
+  handle('search', library((query: string) => api.search(query)))
+  handle('setLiked', library((id: string, liked: boolean) => player.setLiked(id, liked)))
+  handle('getLikedIds', () => player.likedIds())
 
-  handle('remote:playTrack', (context: PlayContext) => registry.active.playTrack(context))
-  handle('remote:playPlaylist', (playlist: Playlist) => registry.active.playPlaylist(playlist))
-  handle('remote:resume', () => registry.active.resume())
-  handle('remote:pause', () => registry.active.pause())
-  handle('remote:next', () => registry.active.next())
-  handle('remote:previous', () => registry.active.previous())
-  handle('remote:seek', (ms: number) => registry.active.seek(ms))
-  handle('remote:setVolume', (volume: number) => registry.active.setVolume(volume))
+  handle('playTrack', (context: PlayContext) => player.playTrack(context))
+  handle('resume', () => player.resume())
+  handle('pause', () => player.pause())
+  handle('next', () => player.next())
+  handle('previous', () => player.previous())
+  handle('seek', (ms: number) => player.seek(ms))
+
+  handle('setVolume', (volume: number) => smtc.setVolume(volume))
+  handle('getEq', () => equalizer.status())
+  handle('setEq', async (state: EqState) => {
+    settingsStore.update({ eq: state })
+    return equalizer.apply(state)
+  })
 
   ipcMain.on('window:control', (_event, action: 'minimize' | 'close') => {
     if (action === 'minimize') window.minimize()
     else window.close()
   })
 
-  window.webContents.once('did-finish-load', () => registry.restartWatch())
-  return registry
+  // The visualizer only needs audio while the window can be seen.
+  const visualizer = (on: boolean): void => void smtc.setVisualizer(on).catch(() => undefined)
+  window.on('minimize', () => visualizer(false))
+  window.on('restore', () => visualizer(true))
+
+  // The renderer calls `ready` once its listeners exist (also after a reload),
+  // so the first state/volume messages are never lost.
+  let stops: (() => void)[] = []
+  const stopAll = (): void => {
+    stops.forEach((stop) => stop())
+    stops = []
+  }
+  handle('ready', () => {
+    stopAll()
+    stops.push(
+      player.watch((state) => send('remote:state', state)),
+      smtc.onVolume((volume) => send('remote:volume', volume)),
+      smtc.onPcm((chunk) => send('remote:pcm', chunk))
+    )
+    visualizer(true)
+    void player.loadLiked().catch(() => undefined)
+  })
+
+  return stopAll
 }

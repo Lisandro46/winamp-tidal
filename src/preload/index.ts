@@ -16,29 +16,39 @@ const subscribe =
     }
   }
 
-const api: RemoteApi = {
-  listProviders: invoke('listProviders'),
-  getSettings: invoke('getSettings'),
-  selectProvider: invoke('selectProvider'),
-  connect: invoke('connect'),
-  disconnect: invoke('disconnect'),
-  setSkin: invoke('setSkin'),
-  getPlaylists: invoke('getPlaylists'),
-  getPlaylistTracks: invoke('getPlaylistTracks'),
-  getLikedTracks: invoke('getLikedTracks'),
-  search: invoke('search'),
-  playTrack: invoke('playTrack'),
-  playPlaylist: invoke('playPlaylist'),
-  resume: invoke('resume'),
-  pause: invoke('pause'),
-  next: invoke('next'),
-  previous: invoke('previous'),
-  seek: invoke('seek'),
-  setVolume: invoke('setVolume'),
-  onState: subscribe('state'),
-  onError: subscribe('error'),
-  onProviders: subscribe('providers'),
-  windowControl: (action) => ipcRenderer.send('window:control', action)
-} as RemoteApi
+const methods = [
+  'getAuth',
+  'connect',
+  'disconnect',
+  'getSettings',
+  'setSkin',
+  'getLikedTracks',
+  'getPlaylists',
+  'getMixes',
+  'getAlbums',
+  'getArtists',
+  'getTracks',
+  'search',
+  'setLiked',
+  'getLikedIds',
+  'playTrack',
+  'resume',
+  'pause',
+  'next',
+  'previous',
+  'seek',
+  'setVolume',
+  'getEq',
+  'setEq',
+  'ready'
+] as const
+
+const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error' } as const
+
+const api = {
+  ...Object.fromEntries(methods.map((name) => [name, invoke(name)])),
+  ...Object.fromEntries(Object.entries(events).map(([name, channel]) => [name, subscribe(channel)])),
+  windowControl: (action: 'minimize' | 'close') => ipcRenderer.send('window:control', action)
+} as unknown as RemoteApi
 
 contextBridge.exposeInMainWorld('remote', api)

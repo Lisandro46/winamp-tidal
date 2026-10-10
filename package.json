@@ -1,7 +1,7 @@
 {
   "name": "winamp-tidal",
   "version": "0.1.0",
-  "description": "Winamp-style skin (Webamp) that remote-controls Spotify and TIDAL",
+  "description": "Winamp skin (Webamp) that remote-controls the TIDAL desktop app",
   "main": "out/main/index.js",
   "author": "Lisandro Arrigoni",
   "license": "MIT",

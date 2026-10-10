@@ -1,38 +1,45 @@
 import type Webamp from 'webamp'
-import type { PlayContext, PlaybackState, Playlist, Track } from '@shared/types'
+import type { EqState, EqStatus, PlaybackState, SystemVolume, Track } from '@shared/types'
 import { getRemoteMedia, setRemoteMediaHandlers, withoutEcho } from './RemoteMedia'
 
 const TRACK_URL = 'remote://track/'
 const NOW_PLAYING_URL = 'remote://now-playing'
+const EQ_BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000] as const
+const EQ_DEBOUNCE_MS = 120
+/** After the user moves the volume slider, ignore system updates briefly to avoid jitter. */
+const VOLUME_HOLD_MS = 600
 
-interface LoadedList {
-  tracks: Track[]
-  playlist?: Playlist
+const ignore = (promise: Promise<unknown>): void => {
+  promise.catch(() => undefined) // errors are reported by the main process
 }
 
 /**
- * Keeps Webamp and the remote player in sync:
- *  - Webamp UI actions → remote commands (via RemoteMedia handlers and DOM interception)
- *  - remote PlaybackState → Webamp playlist selection, marquee, clock and status
+ * Keeps Webamp and the TIDAL app in sync:
+ *  - Webamp UI actions → TIDAL commands, system volume and Equalizer APO
+ *  - TIDAL state → Webamp playlist selection, marquee, clock and status
  */
 export class RemoteController {
-  private list: LoadedList = { tracks: [] }
+  private tracks: Track[] = []
   private lastState: PlaybackState | null = null
   private volumeArmed = false
+  private volumeTouchedAt = 0
+  private eqTimer: ReturnType<typeof setTimeout> | undefined
 
-  constructor(private readonly webamp: Webamp) {
+  constructor(
+    private readonly webamp: Webamp,
+    private readonly onEqStatus: (status: EqStatus) => void
+  ) {
     const remote = window.remote
-    const run = (promise: Promise<unknown>): void => {
-      promise.catch(() => undefined) // errors are reported by the main process
-    }
-
     setRemoteMediaHandlers({
-      play: () => run(remote.resume()),
-      pause: () => run(remote.pause()),
-      seek: (ms) => run(remote.seek(ms)),
+      play: () => ignore(remote.resume()),
+      pause: () => ignore(remote.pause()),
+      seek: (ms) => ignore(remote.seek(ms)),
       setVolume: (volume) => {
-        if (this.volumeArmed) run(remote.setVolume(volume))
+        if (!this.volumeArmed) return
+        this.volumeTouchedAt = performance.now()
+        ignore(remote.setVolume(volume))
       },
+      eqChanged: () => this.scheduleEqSync(),
       loadTrack: (url, autoPlay) => {
         if (autoPlay) this.playUrl(url)
       }
@@ -40,15 +47,11 @@ export class RemoteController {
     this.interceptTransport()
   }
 
-  // ---- Webamp → remote ---------------------------------------------------
+  // ---- Webamp → TIDAL ----------------------------------------------------------
 
-  /** The remote owns the queue, so next/previous go straight to it. */
+  /** The TIDAL app (plus our queue) owns playback order, so next/previous go to it. */
   private interceptTransport(): void {
     const remote = window.remote
-    const commands: Record<string, () => Promise<void>> = {
-      next: () => remote.next(),
-      previous: () => remote.previous()
-    }
     window.addEventListener(
       'click',
       (event) => {
@@ -57,7 +60,7 @@ export class RemoteController {
         event.stopPropagation()
         event.preventDefault()
         if (button.id === 'eject') document.dispatchEvent(new CustomEvent('library:toggle'))
-        else void commands[button.id]().catch(() => undefined)
+        else ignore(button.id === 'next' ? remote.next() : remote.previous())
       },
       true
     )
@@ -65,11 +68,11 @@ export class RemoteController {
       'keydown',
       (event) => {
         if ((event.target as HTMLElement).closest('input, textarea, #library')) return
-        const key = event.key.toLowerCase()
         if (event.ctrlKey || event.altKey || event.metaKey) return
+        const key = event.key.toLowerCase()
         if (key === 'b' || key === 'z') {
           event.stopPropagation()
-          void (key === 'b' ? remote.next() : remote.previous()).catch(() => undefined)
+          ignore(key === 'b' ? remote.next() : remote.previous())
         } else if (key === 'l' || event.code === 'Numpad0') {
           event.stopPropagation()
           document.dispatchEvent(new CustomEvent('library:toggle'))
@@ -80,26 +83,17 @@ export class RemoteController {
   }
 
   private playUrl(url: string): void {
-    if (!url.startsWith(TRACK_URL)) {
-      if (url === NOW_PLAYING_URL) void window.remote.resume().catch(() => undefined)
-      return
-    }
-    const id = url.slice(TRACK_URL.length)
-    const index = this.list.tracks.findIndex((t) => t.id === id)
-    if (index < 0) return
-    void this.playIndex(index)
-  }
-
-  private async playIndex(index: number): Promise<void> {
-    const context: PlayContext = { tracks: this.list.tracks, index, playlist: this.list.playlist }
-    await window.remote.playTrack(context).catch(() => undefined)
+    if (url === NOW_PLAYING_URL) return ignore(window.remote.resume())
+    if (!url.startsWith(TRACK_URL)) return
+    const index = this.tracks.findIndex((t) => t.id === url.slice(TRACK_URL.length))
+    if (index >= 0) ignore(window.remote.playTrack({ tracks: this.tracks, index }))
   }
 
   // ---- Library → Webamp playlist -------------------------------------------
 
-  /** Replaces Webamp's playlist with `tracks` (and optionally starts one). */
-  loadList(tracks: Track[], playlist?: Playlist, playIndex?: number): void {
-    this.list = { tracks, playlist }
+  /** Replaces Webamp's playlist with `tracks` and optionally starts one. */
+  loadList(tracks: Track[], playIndex?: number): void {
+    this.tracks = tracks
     withoutEcho(() => {
       this.webamp.store.dispatch({ type: 'REMOVE_ALL_TRACKS' })
       this.webamp.appendTracks(
@@ -110,15 +104,11 @@ export class RemoteController {
         }))
       )
     })
-    if (playIndex != null) void this.playIndex(playIndex)
+    if (playIndex != null) ignore(window.remote.playTrack({ tracks, index: playIndex }))
     else if (this.lastState) this.applyState(this.lastState)
   }
 
-  clearList(): void {
-    this.loadList([])
-  }
-
-  // ---- remote → Webamp ---------------------------------------------------
+  // ---- TIDAL → Webamp ----------------------------------------------------------
 
   applyState(state: PlaybackState | null): void {
     this.lastState = state
@@ -132,29 +122,29 @@ export class RemoteController {
 
     withoutEcho(() => {
       const webampId = this.ensureCurrentTrack(state)
-      const current = store.getState().playlist.currentTrack
-      if (webampId != null && current !== webampId) {
+      if (webampId != null && store.getState().playlist.currentTrack !== webampId) {
         store.dispatch({ type: 'PLAY_TRACK', id: webampId })
       }
-
       media?.applyRemote(state.positionMs, state.durationMs, state.isPlaying)
       const status = store.getState().media.status
       if (state.isPlaying && status !== 'PLAYING') store.dispatch({ type: 'IS_PLAYING' })
       if (!state.isPlaying && status === 'PLAYING') store.dispatch({ type: 'PAUSE' })
-
-      if (state.volume != null && Math.abs(store.getState().media.volume - state.volume) > 1) {
-        store.dispatch({ type: 'SET_VOLUME', volume: state.volume })
-      }
     })
+  }
+
+  applyVolume({ volume }: SystemVolume): void {
     this.volumeArmed = true
+    if (performance.now() - this.volumeTouchedAt < VOLUME_HOLD_MS) return
+    if (Math.abs(this.webamp.store.getState().media.volume - volume) < 1) return
+    withoutEcho(() => this.webamp.store.dispatch({ type: 'SET_VOLUME', volume }))
   }
 
   /**
-   * Returns the Webamp playlist id that represents what the remote is playing.
+   * Returns the Webamp playlist id that represents what TIDAL is playing.
    * If it's not in the loaded list, a single "now playing" entry is used instead.
    */
   private ensureCurrentTrack(state: PlaybackState): number | null {
-    const entries = this.webamp.getPlaylistTracks() as { id: number; url: string }[]
+    const entries = this.webamp.getPlaylistTracks()
     if (state.trackId) {
       const match = entries.find((e) => e.url === TRACK_URL + state.trackId)
       if (match) return match.id
@@ -164,20 +154,48 @@ export class RemoteController {
     let nowPlaying = entries.find((e) => e.url === NOW_PLAYING_URL)
     if (!nowPlaying) {
       this.webamp.appendTracks([{ url: NOW_PLAYING_URL, duration: state.durationMs / 1000, metaData }])
-      nowPlaying = (this.webamp.getPlaylistTracks() as { id: number; url: string }[]).find(
-        (e) => e.url === NOW_PLAYING_URL
-      )
+      nowPlaying = this.webamp.getPlaylistTracks().find((e) => e.url === NOW_PLAYING_URL)
       if (!nowPlaying) return null
     }
-    this.webamp.store.dispatch({
-      type: 'SET_MEDIA_TAGS',
-      id: nowPlaying.id,
-      ...metaData,
-      sampleRate: 44000,
-      bitrate: 320000,
-      numberOfChannels: 2
-    })
-    this.webamp.store.dispatch({ type: 'SET_MEDIA_DURATION', id: nowPlaying.id, duration: state.durationMs / 1000 })
+    if (nowPlaying.title !== state.title || nowPlaying.artist !== state.artist) {
+      this.webamp.store.dispatch({
+        type: 'SET_MEDIA_TAGS',
+        id: nowPlaying.id,
+        ...metaData,
+        sampleRate: 44000,
+        bitrate: 320000,
+        numberOfChannels: 2
+      })
+      this.webamp.store.dispatch({ type: 'SET_MEDIA_DURATION', id: nowPlaying.id, duration: state.durationMs / 1000 })
+    }
     return nowPlaying.id
+  }
+
+  // ---- Equalizer ---------------------------------------------------------------
+
+  private readEq(): EqState {
+    const { on, sliders } = this.webamp.store.getState().equalizer
+    return { on, preamp: sliders.preamp, bands: EQ_BANDS.map((band) => sliders[band]) }
+  }
+
+  private scheduleEqSync(): void {
+    clearTimeout(this.eqTimer)
+    this.eqTimer = setTimeout(
+      () => ignore(window.remote.setEq(this.readEq()).then(this.onEqStatus)),
+      EQ_DEBOUNCE_MS
+    )
+  }
+
+  /** Puts saved EQ values back on the sliders and applies them once. */
+  restoreEq(saved: EqState | undefined): void {
+    if (saved) {
+      const store = this.webamp.store
+      withoutEcho(() => {
+        store.dispatch({ type: 'SET_BAND_VALUE', band: 'preamp', value: saved.preamp })
+        EQ_BANDS.forEach((band, i) => store.dispatch({ type: 'SET_BAND_VALUE', band, value: saved.bands[i] ?? 50 }))
+        store.dispatch({ type: saved.on ? 'SET_EQ_ON' : 'SET_EQ_OFF' })
+      })
+    }
+    this.scheduleEqSync()
   }
 }
