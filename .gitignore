@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+build/
+native/smtc-helper/bin/
+native/smtc-helper/obj/
+.env
+*.log

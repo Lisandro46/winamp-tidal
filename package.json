@@ -1,0 +1,53 @@
+{
+  "name": "winamp-tidal",
+  "version": "0.1.0",
+  "description": "Winamp-style skin (Webamp) that remote-controls Spotify and TIDAL",
+  "main": "out/main/index.js",
+  "author": "Lisandro Arrigoni",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "npm run build:helper && electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "build:helper": "dotnet build native/smtc-helper -c Release -o build/smtc-helper --nologo -v q",
+    "publish:helper": "dotnet publish native/smtc-helper -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o build/smtc-helper --nologo -v q",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist": "npm run publish:helper && npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.lisandro.winamp-remote",
+    "productName": "Winamp Remote",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/smtc-helper",
+        "to": "smtc-helper",
+        "filter": [
+          "smtc-helper.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0",
+    "webamp": "2.3.1"
+  }
+}

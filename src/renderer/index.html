@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' data: blob: ws://localhost:*; media-src 'self' data: blob:"
+    />
+    <title>Winamp Remote</title>
+  </head>
+  <body>
+    <header id="titlebar">
+      <span class="title">WINAMP REMOTE</span>
+      <div class="actions">
+        <button id="btn-library" title="Mostrar/ocultar Media Library (L)">Library</button>
+        <button id="btn-skin" title="Cargar un skin .wsz">Skin…</button>
+        <button id="btn-skin-reset" title="Volver al skin clásico">Skin base</button>
+        <input id="skin-file" type="file" accept=".wsz,.zip" hidden />
+        <button id="btn-minimize" class="wnd" title="Minimizar">_</button>
+        <button id="btn-close" class="wnd" title="Cerrar">×</button>
+      </div>
+    </header>
+    <main id="layout">
+      <div id="stage"></div>
+      <aside id="library"></aside>
+    </main>
+    <div id="toast" role="status"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
