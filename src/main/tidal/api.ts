@@ -118,7 +118,9 @@ export class TidalApi {
   private url(path: string, params: Record<string, string | string[] | undefined> = {}): string {
     const url = new URL(path.startsWith('http') ? path : `${API}${path}`)
     for (const [key, value] of Object.entries(params)) {
-      for (const item of asArray(value)) url.searchParams.append(key, item)
+      // TIDAL only reads the first of repeated `include` params; filters can repeat.
+      const items = key === 'include' ? [asArray(value).join(',')].filter(Boolean) : asArray(value)
+      for (const item of items) url.searchParams.append(key, item)
     }
     return url.toString()
   }
@@ -302,16 +304,22 @@ export class TidalApi {
 
   async search(query: string): Promise<SearchResults> {
     const countryCode = await this.country()
-    const q = encodeURIComponent(query)
-    const ids = async (relationship: string): Promise<string[]> => {
-      const doc = await this.get(this.url(`/searchResults/${q}/relationships/${relationship}`, { countryCode }))
-      return this.idsOf(asArray(doc?.data), relationship)
-    }
+    // `include` makes one request return the ids of every result type; details are batch-loaded below.
+    const doc = await this.get(
+      this.url('/searchResults', {
+        'filter[query]': query,
+        countryCode,
+        include: ['tracks', 'albums', 'artists', 'playlists']
+      })
+    )
+    const result = asArray(doc?.data)[0]
+    const ids = (relationship: string): string[] =>
+      this.idsOf(asArray(result?.relationships?.[relationship]?.data), relationship)
     const [tracks, albums, artists, playlists] = await Promise.all([
-      ids('tracks').then((x) => this.tracks(x)),
-      ids('albums').then((x) => this.albums(x)),
-      ids('artists').then((x) => this.artists(x)),
-      ids('playlists').then((x) => this.playlists(x))
+      this.tracks(ids('tracks')),
+      this.albums(ids('albums')),
+      this.artists(ids('artists')),
+      this.playlists(ids('playlists'))
     ])
     return { tracks, albums, artists, playlists }
   }
