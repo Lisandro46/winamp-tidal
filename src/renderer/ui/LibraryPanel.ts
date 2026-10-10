@@ -1,6 +1,6 @@
 import type { AuthInfo, Collection, EqStatus, PlaybackState, SearchResults, Track } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
-import { makeFloating } from './desktop'
+import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
 
 export interface SkinActions {
   pick(): void
@@ -84,7 +84,7 @@ export class LibraryPanel {
       )
     )
     root.append(titlebar, this.status, this.body, this.nowPlaying)
-    makeFloating(root, titlebar, 'library-position')
+    makeFloating(root, titlebar, LIBRARY_POSITION_KEY)
     this.body.append(
       el('div', { className: 'ml-side' }, this.search, this.nav),
       el(

@@ -49,7 +49,15 @@ const api = {
   ...Object.fromEntries(methods.map((name) => [name, invoke(name)])),
   ...Object.fromEntries(Object.entries(events).map(([name, channel]) => [name, subscribe(channel)])),
   windowControl: (action: 'minimize' | 'close') => ipcRenderer.send('window:control', action),
-  setInteractive: (interactive: boolean) => ipcRenderer.send('window:interactive', interactive)
+  setInteractive: (interactive: boolean) => ipcRenderer.send('window:interactive', interactive),
+  getLayout: () => ipcRenderer.invoke('window:layout'),
+  onLayout: (callback: (layout: unknown) => void) => {
+    const listener = (_event: IpcRendererEvent, layout: unknown): void => callback(layout)
+    ipcRenderer.on('window:layout', listener)
+    return () => {
+      ipcRenderer.off('window:layout', listener)
+    }
+  }
 } as unknown as RemoteApi
 
 contextBridge.exposeInMainWorld('remote', api)

@@ -76,6 +76,19 @@ export interface AppSettings {
   eq?: EqState
 }
 
+export interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Monitor work areas in window coordinates (the window spans all monitors). */
+export interface DesktopLayout {
+  primary: Rect
+  displays: Rect[]
+}
+
 export interface PcmChunk {
   rate: number
   /** Base64 mono signed 16-bit PCM. */
@@ -122,4 +135,6 @@ export interface RemoteApi {
   windowControl(action: 'minimize' | 'close'): void
   /** Whether the pointer is over UI (clicks handled) or empty space (clicks pass through). */
   setInteractive(interactive: boolean): void
+  getLayout(): Promise<DesktopLayout>
+  onLayout(callback: (layout: DesktopLayout) => void): () => void
 }

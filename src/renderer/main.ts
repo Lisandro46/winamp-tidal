@@ -3,7 +3,7 @@ import './styles/app.css'
 import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
 import { LibraryPanel, type SkinActions } from './ui/LibraryPanel'
-import { trackPointer } from './ui/desktop'
+import { keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
 
@@ -67,7 +67,14 @@ async function main(): Promise<void> {
   window.remote.onError((message) => showToast(message))
 
   trackPointer()
-  await webamp.renderInto($('#stage'))
+  // The window spans every monitor; start the UI on the primary one.
+  const layout = await window.remote.getLayout()
+  placeOnPrimary($('#stage'), $('#library'), layout)
+  keepWebampOnScreen(webamp as unknown as Parameters<typeof keepWebampOnScreen>[0])
+  window.remote.onLayout((next) => updateLayout($('#stage'), $('#library'), next))
+  // Centered over the primary monitor's #stage but bounded by the whole window,
+  // so the Winamp windows can be dragged onto any monitor.
+  await webamp.renderWhenReady($('#stage'))
   controller.restoreEq(settings.eq)
 
   library = new LibraryPanel($('#library'), controller, skinActions(webamp))
