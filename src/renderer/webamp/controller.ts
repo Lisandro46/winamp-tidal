@@ -191,7 +191,12 @@ export class RemoteController {
     const entries = this.webamp.getPlaylistTracks()
     if (state.trackId) {
       const match = entries.find((e) => e.url === TRACK_URL + state.trackId)
-      if (match) return match.id
+      if (match) {
+        // A "now playing" entry left from before the track started isn't needed anymore.
+        const stale = entries.find((e) => e.url === NOW_PLAYING_URL)
+        if (stale) this.webamp.store.dispatch({ type: 'REMOVE_TRACKS', ids: [stale.id] })
+        return match.id
+      }
     }
 
     const metaData = { title: state.title, artist: state.artist, album: state.album }
