@@ -9,8 +9,8 @@ Un **Winamp 2 de verdad** (con skins `.wsz`, vía [Webamp](https://github.com/ca
 ## Descargar e instalar (2 minutos)
 
 1. Andá a **[Releases](https://github.com/Lisandro46/winamp-tidal/releases/latest)** y bajá uno de estos:
-   - `Winamp-Remote-Setup-x.y.z.exe` → instalador (recomendado; crea acceso directo).
-   - `Winamp-Remote-Portable-x.y.z.exe` → sin instalar, lo abrís y listo.
+   - `Winamp-Remote-Setup.exe` → instalador (recomendado; crea acceso directo).
+   - `Winamp-Remote-Portable.exe` → sin instalar, lo abrís y listo.
 2. Abrilo. Windows puede mostrar **"Windows protegió su PC"** porque la app no está firmada (un certificado cuesta cientos de dólares por año). Tocá **Más información → Ejecutar de todas formas**. El código es público y el instalador lo arma GitHub directamente desde este repo.
 3. La primera vez te pregunta **qué servicio usás**. Lo podés cambiar cuando quieras con el botón del servicio (**TIDAL…** / **YouTube Music…**) de la Media Library.
 
@@ -120,7 +120,7 @@ A **real Winamp 2** (with `.wsz` skins, via [Webamp](https://github.com/captbari
 
 ### Install
 
-1. Download the latest `Winamp-Remote-Setup-x.y.z.exe` (installer) or `Winamp-Remote-Portable-x.y.z.exe` from **[Releases](https://github.com/Lisandro46/winamp-tidal/releases/latest)**.
+1. Download the latest `Winamp-Remote-Setup.exe` (installer) or `Winamp-Remote-Portable.exe` from **[Releases](https://github.com/Lisandro46/winamp-tidal/releases/latest)**.
 2. If Windows shows *"Windows protected your PC"* (the app isn't code-signed), click **More info → Run anyway**. The installer is built by GitHub Actions straight from this repo.
 3. On first run, pick a service. You can switch later with the service button in the Media Library.
 

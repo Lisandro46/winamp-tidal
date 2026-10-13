@@ -44,10 +44,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "Winamp-Remote-Setup-${version}.${ext}"
+      "artifactName": "Winamp-Remote-Setup.${ext}"
     },
     "portable": {
-      "artifactName": "Winamp-Remote-Portable-${version}.${ext}"
+      "artifactName": "Winamp-Remote-Portable.${ext}"
     }
   },
   "devDependencies": {
