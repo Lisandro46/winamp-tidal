@@ -1,14 +1,15 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { AuthInfo, Collection, EqState, PlayContext, TidalCredentials, Track } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext, ProviderId, TidalCredentials, Track } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { Equalizer } from './audio/equalizer'
+import { createProvider } from './providers'
+import { TidalProvider } from './providers/tidal'
+import type { MusicProvider } from './providers/types'
 import { searchSkins } from './skins'
 import { smtc } from './smtc/helperClient'
-import { TidalApi } from './tidal/api'
-import { TidalPlayer } from './tidal/player'
 import { openVisualizer, visualizerWindow } from './visualizerWindow'
 
-/** Wires the renderer's `window.remote` API to TIDAL, the Windows helper and the equalizer. */
+/** Wires the renderer's `window.remote` API to the music service, the Windows helper and the equalizer. */
 export function registerIpc(window: BrowserWindow): () => void {
   const send = (channel: string, payload: unknown): void => {
     if (!window.isDestroyed()) window.webContents.send(channel, payload)
@@ -18,16 +19,23 @@ export function registerIpc(window: BrowserWindow): () => void {
     send(channel, payload)
     visualizerWindow()?.webContents.send(channel, payload)
   }
-  const api = new TidalApi()
-  const player = new TidalPlayer(api, (ids) => send('remote:liked', ids))
+  const onLiked = (ids: string[]): void => send('remote:liked', ids)
+  let provider: MusicProvider = createProvider(settingsStore.get().provider ?? 'tidal', onLiked)
   const equalizer = new Equalizer()
 
   const auth = (): AuthInfo => ({
-    configured: api.configured,
-    connected: api.connected,
-    catalog: api.catalogAvailable,
-    hint: api.configured ? undefined : 'Solo control remoto'
+    provider: provider.id,
+    capabilities: provider.capabilities,
+    configured: provider.configured,
+    connected: provider.connected,
+    catalog: provider.catalogAvailable,
+    hint: provider.capabilities.credentials && !provider.configured ? 'Solo control remoto' : undefined
   })
+  // Credentials only exist for TIDAL's catalog mode.
+  const tidal = (): TidalProvider => {
+    if (!(provider instanceof TidalProvider)) throw new Error('Esto solo aplica a TIDAL')
+    return provider
+  }
 
   // Every handler reports failures to the UI as well as rejecting the call.
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R> | R): void => {
@@ -40,36 +48,50 @@ export function registerIpc(window: BrowserWindow): () => void {
       }
     })
   }
-  // User library calls need a login; catalog calls also work with the app token.
+  // User library calls need a login; catalog calls may work without one.
   const library =
     <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
-      await api.ensureUser()
+      await provider.ensureUser()
       return fn(...args)
     }
   const catalog =
     <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
-      await api.ensureCatalog()
+      await provider.ensureCatalog()
       return fn(...args)
     }
 
   handle('getAuth', auth)
   handle('connect', async () => {
-    await api.login()
-    await player.loadLiked()
+    await provider.login()
+    await provider.loadLiked()
     return auth()
   })
   handle('disconnect', async () => {
-    api.logout()
-    await player.loadLiked()
+    await provider.logout()
+    await provider.loadLiked()
     return auth()
   })
-  handle('getCredentials', () => api.credentialsInfo())
+  handle('getCredentials', () => tidal().credentialsInfo())
   handle('setCredentials', async (credentials: TidalCredentials | null) => {
-    await api.setCredentials(credentials)
+    await tidal().setCredentials(credentials)
     settingsStore.update({ setupDone: true })
-    await player.loadLiked().catch(() => undefined)
+    await provider.loadLiked().catch(() => undefined)
+    return auth()
+  })
+  handle('setProvider', async (id: ProviderId) => {
+    // YouTube Music needs nothing else; TIDAL's setup continues with its catalog choice.
+    settingsStore.update({ provider: id, ...(id === 'ytmusic' ? { setupDone: true } : {}) })
+    if (id !== provider.id) {
+      const previous = provider
+      stopWatching()
+      provider = createProvider(id, onLiked)
+      await previous.dispose().catch(() => undefined)
+      watchState()
+      void provider.loadLiked().catch(() => undefined)
+    }
+    send('remote:provider', auth())
     return auth()
   })
   handle('getSettings', () => settingsStore.get())
@@ -79,23 +101,23 @@ export function registerIpc(window: BrowserWindow): () => void {
 
   handle('searchSkins', (query: string) => searchSkins(query))
 
-  handle('getLikedTracks', library(() => api.likedTracks()))
-  handle('getPlaylists', library(() => api.userPlaylists()))
-  handle('getMixes', library(() => api.mixes()))
-  handle('getAlbums', library(() => api.userAlbums()))
-  handle('getArtists', library(() => api.userArtists()))
-  handle('getTracks', catalog((collection: Collection) => api.collectionTracks(collection)))
-  handle('search', catalog((query: string) => api.search(query)))
-  handle('setLiked', library((id: string, liked: boolean) => player.setLiked(id, liked)))
-  handle('getLikedIds', () => player.likedIds())
+  handle('getLikedTracks', library(() => provider.likedTracks()))
+  handle('getPlaylists', library(() => provider.userPlaylists()))
+  handle('getMixes', library(() => provider.mixes()))
+  handle('getAlbums', library(() => provider.userAlbums()))
+  handle('getArtists', library(() => provider.userArtists()))
+  handle('getTracks', catalog((collection: Collection) => provider.collectionTracks(collection)))
+  handle('search', catalog((query: string) => provider.search(query)))
+  handle('setLiked', library((id: string, liked: boolean) => provider.setLiked(id, liked)))
+  handle('getLikedIds', () => provider.likedIds())
 
-  handle('playTrack', (context: PlayContext) => player.playTrack(context))
-  handle('setQueue', (tracks: Track[]) => player.setQueue(tracks))
-  handle('resume', () => player.resume())
-  handle('pause', () => player.pause())
-  handle('next', () => player.next())
-  handle('previous', () => player.previous())
-  handle('seek', (ms: number) => player.seek(ms))
+  handle('playTrack', (context: PlayContext) => provider.playTrack(context))
+  handle('setQueue', (tracks: Track[]) => provider.setQueue(tracks))
+  handle('resume', () => provider.resume())
+  handle('pause', () => provider.pause())
+  handle('next', () => provider.next())
+  handle('previous', () => provider.previous())
+  handle('seek', (ms: number) => provider.seek(ms))
 
   handle('setVolume', (volume: number) => smtc.setVolume(volume))
   handle('getEq', () => equalizer.status())
@@ -125,20 +147,33 @@ export function registerIpc(window: BrowserWindow): () => void {
   // The renderer calls `ready` once its listeners exist (also after a reload),
   // so the first state/volume messages are never lost.
   let stops: (() => void)[] = []
+  let unwatch = (): void => undefined
+  const stopWatching = (): void => {
+    unwatch()
+    unwatch = () => undefined
+  }
+  const watchState = (): void => {
+    stopWatching()
+    unwatch = provider.watch((state) => broadcast('remote:state', state))
+  }
   const stopAll = (): void => {
+    stopWatching()
     stops.forEach((stop) => stop())
     stops = []
   }
   handle('ready', () => {
     stopAll()
+    watchState()
     stops.push(
-      player.watch((state) => broadcast('remote:state', state)),
       smtc.onVolume((volume) => send('remote:volume', volume)),
       smtc.onPcm((chunk) => broadcast('remote:pcm', chunk))
     )
     visualizer(true)
-    void player.loadLiked().catch(() => undefined)
+    void provider.loadLiked().catch(() => undefined)
   })
 
-  return stopAll
+  return () => {
+    stopAll()
+    void provider.dispose()
+  }
 }

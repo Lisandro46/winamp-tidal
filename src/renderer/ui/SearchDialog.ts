@@ -1,4 +1,4 @@
-import type { Collection, SearchResults, Track } from '@shared/types'
+import { PROVIDER_NAMES, type Collection, type ProviderId, type SearchResults, type Track } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
 import { centerOnPrimary, keepOnScreen, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
@@ -24,7 +24,7 @@ const FILTERS: { filter: Filter; label: string }[] = [
 const SEARCH_DEBOUNCE_MS = 350
 
 /**
- * Winamp-style "Add from TIDAL" window (ADD button of the playlist, or J):
+ * Winamp-style "Add from TIDAL / YouTube Music" window (ADD button of the playlist, or J):
  * search or browse the library and play or enqueue tracks, albums, playlists,
  * artists and mixes — whole or one song at a time.
  */
@@ -38,6 +38,8 @@ export class SearchDialog {
   private searchTimer: ReturnType<typeof setTimeout> | undefined
   private lastResults: SearchResults | undefined
   private placed: boolean
+  private provider: ProviderId = 'tidal'
+  private heading = el('span', {}, 'AGREGAR DESDE TIDAL')
 
   private input = el('input', { type: 'search', className: 'ml-search', placeholder: 'Buscar temas, álbumes, artistas…' })
   private filters = el('div', { className: 'sd-filters' })
@@ -53,7 +55,7 @@ export class SearchDialog {
     const titlebar = el(
       'div',
       { className: 'ml-titlebar' },
-      el('span', {}, 'AGREGAR DESDE TIDAL'),
+      this.heading,
       el(
         'div',
         { className: 'ml-titlebar-actions' },
@@ -90,6 +92,9 @@ export class SearchDialog {
     const auth = await window.remote.getAuth()
     this.connected = auth.connected
     this.catalog = auth.catalog
+    if (auth.provider !== this.provider) this.history = [{ kind: 'home' }]
+    this.provider = auth.provider
+    this.heading.textContent = `AGREGAR DESDE ${PROVIDER_NAMES[auth.provider].toUpperCase()}`
     if (this.history.length === 1) void this.show()
   }
 
@@ -213,7 +218,9 @@ export class SearchDialog {
         el(
           'div',
           { className: 'ml-empty' },
-          'Escribí arriba para buscar temas, discos, artistas o playlists públicas. Tus favoritos, mixes y playlists aparecen cuando TIDAL habilite el login de la app.'
+          this.provider === 'ytmusic'
+            ? 'Escribí arriba para buscar temas, discos, artistas o playlists. Iniciá sesión en la Media Library para ver tus favoritos y playlists.'
+            : 'Escribí arriba para buscar temas, discos, artistas o playlists públicas. Tus favoritos, mixes y playlists aparecen cuando TIDAL habilite el login de la app.'
         )
       )
       return

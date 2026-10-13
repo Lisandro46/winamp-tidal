@@ -129,6 +129,11 @@ async function main(): Promise<void> {
   new SearchDialog($('#tidal-search'), controller)
   const setup = new SetupDialog($('#tidal-setup'))
   window.remote.onLiked((ids) => favorites.set(ids))
+  // Another music service: its track ids mean nothing to the old one, so start over.
+  window.remote.onProvider(() => {
+    controller.loadList([])
+    document.dispatchEvent(new CustomEvent('auth:changed'))
+  })
   await library.init()
   await window.remote.ready()
   // First run of an installer (no TIDAL app baked in): ask how it will be used.

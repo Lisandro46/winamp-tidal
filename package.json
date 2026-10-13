@@ -59,7 +59,8 @@
     "electron-vite": "^5.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.0",
-    "webamp": "2.3.1"
+    "webamp": "2.3.1",
+    "youtubei.js": "^18.1.0"
   },
   "homepage": "https://github.com/Lisandro46/winamp-tidal",
   "repository": {

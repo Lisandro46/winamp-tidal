@@ -1,4 +1,4 @@
-import type { AuthInfo, Collection, EqStatus, PlaybackState, SearchResults, Track } from '@shared/types'
+import { PROVIDER_NAMES, type AuthInfo, type Collection, type EqStatus, type PlaybackState, type SearchResults, type Track } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
 import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
@@ -14,9 +14,15 @@ const EQ_APO_URL = 'https://sourceforge.net/projects/equalizerapo/'
 
 const sameView = (a: View | undefined, b: View): boolean => JSON.stringify(a) === JSON.stringify(b)
 
-/** Winamp "Media Library"-style window for the TIDAL library. */
+/** Winamp "Media Library"-style window for the music service's library. */
 export class LibraryPanel {
-  private auth: AuthInfo = { configured: false, connected: false, catalog: false }
+  private auth: AuthInfo = {
+    provider: 'tidal',
+    capabilities: { credentials: true, mixes: true, externalApp: true },
+    configured: false,
+    connected: false,
+    catalog: false
+  }
   private eq: EqStatus = { installed: false }
   private history: View[] = []
   private loadToken = 0
@@ -28,7 +34,12 @@ export class LibraryPanel {
   private title = el('div', { className: 'ml-list-title' })
   private actions = el('div', { className: 'ml-list-actions' })
   private content = el('div', { className: 'ml-content', tabIndex: 0 })
-  private search = el('input', { type: 'search', placeholder: 'Buscar en TIDAL…', className: 'ml-search' })
+  private search = el('input', { type: 'search', className: 'ml-search' })
+  private heading = el('span')
+  private serviceButton = el('button', {
+    title: 'Elegir el servicio de música (TIDAL o YouTube Music)',
+    onclick: () => document.dispatchEvent(new CustomEvent('setup:open'))
+  })
   private body = el('div', { className: 'ml-body' })
   private nowPlaying = el('div', { className: 'ml-now' })
 
@@ -39,15 +50,11 @@ export class LibraryPanel {
     const titlebar = el(
       'div',
       { className: 'ml-titlebar', title: 'Arrastrá para mover · L o el botón eject para mostrar/ocultar' },
-      el('span', {}, 'WINAMP MEDIA LIBRARY · TIDAL'),
+      this.heading,
       el(
         'div',
         { className: 'ml-titlebar-actions' },
-        el('button', {
-          textContent: 'TIDAL…',
-          title: 'Solo control remoto, o buscar en TIDAL (modo catálogo)',
-          onclick: () => document.dispatchEvent(new CustomEvent('setup:open'))
-        }),
+        this.serviceButton,
         el('button', {
           textContent: 'Milkdrop',
           title: 'Mostrar/ocultar el visualizador · doble clic en él para pantalla completa',
@@ -97,6 +104,7 @@ export class LibraryPanel {
     ])
     this.auth = auth
     this.eq = eq
+    this.renderService()
     favorites.set(liked)
     this.renderStatus()
     this.renderNav()
@@ -109,6 +117,16 @@ export class LibraryPanel {
     this.renderStatus()
   }
 
+  private get service(): string {
+    return PROVIDER_NAMES[this.auth.provider]
+  }
+
+  private renderService(): void {
+    this.heading.textContent = `WINAMP MEDIA LIBRARY · ${this.service.toUpperCase()}`
+    this.serviceButton.textContent = `${this.service}…`
+    this.search.placeholder = `Buscar en ${this.service}…`
+  }
+
   // ---- Status bar ------------------------------------------------------------
 
   private renderStatus(): void {
@@ -117,20 +135,21 @@ export class LibraryPanel {
       tidal.push(
         el('span', { className: 'ml-ok' }, `● ${this.auth.hint ?? 'Solo control remoto'}`),
         el('button', {
-          textContent: 'Buscar en TIDAL…',
+          textContent: `Buscar en ${this.service}…`,
           onclick: () => document.dispatchEvent(new CustomEvent('setup:open'))
         })
       )
     } else if (this.auth.connected) {
       tidal.push(
-        el('span', { className: 'ml-ok' }, '● TIDAL conectado'),
+        el('span', { className: 'ml-ok' }, `● ${this.service} conectado`),
         el('button', { textContent: 'Desconectar', onclick: () => void this.connect(false) })
       )
     } else {
       if (this.auth.catalog) {
         tidal.push(el('span', { className: 'ml-ok', title: 'Búsqueda y catálogo sin login' }, '● Modo catálogo'))
       }
-      tidal.push(el('button', { textContent: 'Conectar TIDAL', onclick: () => void this.connect(true) }))
+      const label = this.auth.provider === 'ytmusic' ? 'Iniciar sesión' : `Conectar ${this.service}`
+      tidal.push(el('button', { textContent: label, onclick: () => void this.connect(true) }))
     }
 
     const eq: (Node | string)[] = this.eq.error
@@ -145,7 +164,7 @@ export class LibraryPanel {
         'div',
         { className: 'ml-status-group' },
         el('button', {
-          textContent: '+ Agregar desde TIDAL',
+          textContent: `+ Agregar desde ${this.service}`,
           title: 'Buscar y elegir temas, álbumes, artistas o playlists (J)',
           onclick: () => document.dispatchEvent(new CustomEvent('search:open'))
         }),
@@ -155,7 +174,11 @@ export class LibraryPanel {
   }
 
   private async connect(connect: boolean): Promise<void> {
-    this.status.replaceChildren(connect ? 'Abriendo el login de TIDAL en el navegador…' : 'Desconectando…')
+    const opening =
+      this.auth.provider === 'ytmusic'
+        ? 'Iniciá sesión con tu cuenta de Google en la ventana que se abrió…'
+        : 'Abriendo el login de TIDAL en el navegador…'
+    this.status.replaceChildren(connect ? opening : 'Desconectando…')
     try {
       await (connect ? window.remote.connect() : window.remote.disconnect())
     } catch {
@@ -167,6 +190,7 @@ export class LibraryPanel {
   private async refreshAuth(): Promise<void> {
     this.auth = await window.remote.getAuth()
     library.invalidate()
+    this.renderService()
     this.history = []
     this.renderStatus()
     this.renderNav()
@@ -191,7 +215,9 @@ export class LibraryPanel {
       })
     this.nav.replaceChildren(
       item('♥ Temas favoritos', { kind: 'liked' }),
-      ...SECTIONS.map(({ section, label }) => item(label, { kind: 'section', section }))
+      ...SECTIONS.filter(({ section }) => section !== 'mixes' || this.auth.capabilities.mixes).map(({ section, label }) =>
+        item(label, { kind: 'section', section })
+      )
     )
   }
 
@@ -204,7 +230,9 @@ export class LibraryPanel {
       el(
         'div',
         { className: 'ml-empty' },
-        !this.auth.configured
+        this.auth.provider === 'ytmusic'
+          ? 'YouTube Music suena desde el Winamp, sin abrir otra app. Buscá arriba (o con "+ Agregar desde YouTube Music") cualquier tema, disco, artista o playlist. Con "Iniciar sesión" aparecen tus favoritos, playlists y mixes.'
+          : !this.auth.configured
           ? 'Modo solo control remoto: elegí la música en la app de TIDAL y manejala desde el Winamp. Para buscar en TIDAL desde acá tocá "TIDAL…" arriba.'
           : this.auth.catalog
             ? 'Modo catálogo: buscá arriba (o con "+ Agregar desde TIDAL") cualquier tema, disco, artista o playlist pública y reproducilo o sumalo a la playlist. Tus favoritos, mixes y playlists aparecen cuando TIDAL habilite el login de la app.'
@@ -321,7 +349,7 @@ export class LibraryPanel {
   private renderNowPlaying(state: PlaybackState | null): void {
     this.nowPlayingTrackId = state?.trackId
     if (!state) {
-      this.nowPlaying.replaceChildren(el('div', { className: 'ml-now-empty' }, 'TIDAL no está reproduciendo'))
+      this.nowPlaying.replaceChildren(el('div', { className: 'ml-now-empty' }, `${this.service} no está reproduciendo`))
       return
     }
     const current = this.nowPlaying.querySelector('img')

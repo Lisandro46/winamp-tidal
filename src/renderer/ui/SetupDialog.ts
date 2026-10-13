@@ -1,21 +1,24 @@
+import type { ProviderId } from '@shared/types'
 import { centerOnPrimary, keepOnScreen, makeFloating } from './desktop'
 import { el } from './rows'
 
 const DASHBOARD_URL = 'https://developer.tidal.com/dashboard'
 
 /**
- * First-run "Configurar TIDAL" window (also the "TIDAL…" button of the Media
- * Library): remote-only use, or catalog mode with the user's own TIDAL app.
+ * First-run setup (also the service button of the Media Library): pick TIDAL or
+ * YouTube Music; for TIDAL, remote-only use or catalog mode with the user's own
+ * TIDAL app; for YouTube Music, an optional Google sign-in.
  */
 export class SetupDialog {
   private placed: boolean
   private body = el('div', { className: 'su-body' })
+  private heading = el('span', {}, 'ELEGIR SERVICIO')
 
   constructor(private readonly root: HTMLElement) {
     const titlebar = el(
       'div',
       { className: 'ml-titlebar' },
-      el('span', {}, 'CONFIGURAR TIDAL'),
+      this.heading,
       el(
         'div',
         { className: 'ml-titlebar-actions' },
@@ -32,7 +35,7 @@ export class SetupDialog {
 
   async open(): Promise<void> {
     this.root.classList.remove('hidden')
-    this.renderChoice((await window.remote.getCredentials()).hasSecret)
+    this.renderService((await window.remote.getAuth()).provider)
     if (!this.placed) centerOnPrimary(this.root)
     this.placed = true
     keepOnScreen(this.root)
@@ -42,14 +45,93 @@ export class SetupDialog {
     this.root.classList.add('hidden')
   }
 
-  private renderChoice(catalogOn: boolean): void {
-    const option = (title: string, text: string, onclick: () => void, current: boolean): HTMLElement =>
+  private option(title: string, text: string, onclick: () => void, current: boolean): HTMLElement {
+    return el(
+      'button',
+      { className: `su-option ${current ? 'current' : ''}`, onclick },
+      el('strong', {}, current ? `${title} (actual)` : title),
+      el('span', {}, text)
+    )
+  }
+
+  private renderService(current: ProviderId): void {
+    this.heading.textContent = 'ELEGIR SERVICIO'
+    this.body.replaceChildren(
+      el('p', {}, '¿Con qué servicio vas a escuchar música en el Winamp?'),
+      this.option(
+        'TIDAL',
+        'El Winamp maneja la app de escritorio de TIDAL (tiene que estar abierta). Opcional: buscar en TIDAL con tu propia app de desarrollador.',
+        () => void this.choose('tidal'),
+        current === 'tidal'
+      ),
+      this.option(
+        'YouTube Music',
+        'Suena desde el mismo Winamp, sin otra app. Buscá y reproducí cualquier tema; iniciando sesión con Google ves tus favoritos y playlists.',
+        () => void this.choose('ytmusic'),
+        current === 'ytmusic'
+      ),
+      el('div', { className: 'su-error' })
+    )
+  }
+
+  private async choose(provider: ProviderId): Promise<void> {
+    try {
+      const auth = await window.remote.setProvider(provider)
+      if (provider === 'tidal') this.renderChoice((await window.remote.getCredentials()).hasSecret)
+      else this.renderYouTube(auth.connected)
+    } catch (error) {
+      this.showError(error)
+    }
+  }
+
+  private renderYouTube(connected: boolean): void {
+    this.heading.textContent = 'YOUTUBE MUSIC'
+    const login = el('button', { textContent: 'Iniciar sesión con Google' })
+    login.onclick = () => {
+      login.disabled = true
+      login.textContent = 'Esperando el inicio de sesión…'
+      window.remote
+        .connect()
+        .then(() => {
+          document.dispatchEvent(new CustomEvent('auth:changed'))
+          this.close()
+        })
+        .catch((error) => this.showError(error))
+        .finally(() => {
+          login.disabled = false
+          login.textContent = 'Iniciar sesión con Google'
+        })
+    }
+    this.body.replaceChildren(
       el(
-        'button',
-        { className: `su-option ${current ? 'current' : ''}`, onclick },
-        el('strong', {}, current ? `${title} (actual)` : title),
-        el('span', {}, text)
+        'p',
+        {},
+        connected
+          ? 'Listo: YouTube Music está conectado con tu cuenta. Buscá música con "+ Agregar desde YouTube Music" o la tecla J.'
+          : 'Listo: ya podés buscar y reproducir con "+ Agregar desde YouTube Music" o la tecla J. Si iniciás sesión con tu cuenta de Google vas a ver tus favoritos, playlists y mixes (y con YouTube Premium, sin anuncios).'
+      ),
+      el('div', { className: 'su-note' }, 'El inicio de sesión se hace en una ventana de Google y queda guardado en esta PC.'),
+      el('div', { className: 'su-error' }),
+      el(
+        'div',
+        { className: 'su-buttons' },
+        el('button', { textContent: '◂ Volver', onclick: () => void this.open() }),
+        ...(connected ? [] : [login]),
+        el('button', { textContent: connected ? 'Cerrar' : 'Más tarde', onclick: () => this.close() })
       )
+    )
+  }
+
+  private showError(error: unknown): void {
+    // Electron prefixes IPC errors with "Error invoking remote method …: Error: ".
+    const message = String((error as Error).message).replace(/^.*Error: /, '')
+    const target = this.body.querySelector('.su-error')
+    if (target) target.textContent = `⚠ ${message}`
+  }
+
+  private renderChoice(catalogOn: boolean): void {
+    this.heading.textContent = 'CONFIGURAR TIDAL'
+    const option = this.option.bind(this)
     this.body.replaceChildren(
       el(
         'p',
@@ -69,7 +151,8 @@ export class SetupDialog {
         () => this.renderCatalog(),
         catalogOn
       ),
-      el('div', { className: 'su-error' })
+      el('div', { className: 'su-error' }),
+      el('div', { className: 'su-buttons' }, el('button', { textContent: '◂ Volver', onclick: () => void this.open() }))
     )
   }
 
@@ -110,7 +193,10 @@ export class SetupDialog {
       el(
         'div',
         { className: 'su-buttons' },
-        el('button', { textContent: '◂ Volver', onclick: () => void this.open() }),
+        el('button', {
+          textContent: '◂ Volver',
+          onclick: () => void window.remote.getCredentials().then((c) => this.renderChoice(c.hasSecret))
+        }),
         save
       )
     )
@@ -123,10 +209,7 @@ export class SetupDialog {
       this.close()
       document.dispatchEvent(new CustomEvent('auth:changed'))
     } catch (error) {
-      // Electron prefixes IPC errors with "Error invoking remote method …: Error: ".
-      const message = String((error as Error).message).replace(/^.*Error: /, '')
-      const target = this.body.querySelector('.su-error')
-      if (target) target.textContent = `⚠ ${message}`
+      this.showError(error)
     }
   }
 }

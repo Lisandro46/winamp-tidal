@@ -23,6 +23,7 @@ const methods = [
   'getCredentials',
   'setCredentials',
   'getSettings',
+  'setProvider',
   'setSkin',
   'searchSkins',
   'getLikedTracks',
@@ -48,7 +49,7 @@ const methods = [
   'openVisualizer'
 ] as const
 
-const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error' } as const
+const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onProvider: 'provider' } as const
 
 const api = {
   ...Object.fromEntries(methods.map((name) => [name, invoke(name)])),

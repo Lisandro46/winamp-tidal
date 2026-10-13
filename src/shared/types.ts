@@ -67,7 +67,22 @@ export interface EqStatus {
   error?: string
 }
 
+export type ProviderId = 'tidal' | 'ytmusic'
+
+export const PROVIDER_NAMES: Record<ProviderId, string> = { tidal: 'TIDAL', ytmusic: 'YouTube Music' }
+
+export interface ProviderCapabilities {
+  /** Needs the user's own developer app for search (TIDAL's catalog mode). */
+  credentials: boolean
+  /** Has personal mixes in the library. */
+  mixes: boolean
+  /** Plays through another app that must be open (the TIDAL desktop app). */
+  externalApp: boolean
+}
+
 export interface AuthInfo {
+  provider: ProviderId
+  capabilities: ProviderCapabilities
   configured: boolean
   connected: boolean
   /** Search and catalog browsing work (user login, or the app's client credentials). */
@@ -76,11 +91,13 @@ export interface AuthInfo {
 }
 
 export interface AppSettings {
+  /** The music service the Winamp drives. */
+  provider?: ProviderId
   skinUrl?: string
   eq?: EqState
   /** Zoom factor for the whole UI. */
   scale?: number
-  /** The first-run TIDAL setup was answered (catalog or remote-only). */
+  /** The first-run setup was answered (service, and for TIDAL catalog or remote-only). */
   setupDone?: boolean
 }
 
@@ -126,6 +143,8 @@ export interface RemoteApi {
   /** Checks and saves the user's TIDAL app, or `null` for remote-only use. Ends the first-run setup. */
   setCredentials(credentials: TidalCredentials | null): Promise<AuthInfo>
   getSettings(): Promise<AppSettings>
+  /** Switches the music service; the Winamp playlist should be cleared. */
+  setProvider(provider: ProviderId): Promise<AuthInfo>
   setSkin(url: string | undefined): Promise<void>
   /** Classic skins from the Winamp Skin Museum. */
   searchSkins(query: string): Promise<MuseumSkin[]>
@@ -162,6 +181,7 @@ export interface RemoteApi {
   onPcm(callback: (chunk: PcmChunk) => void): () => void
   onLiked(callback: (ids: string[]) => void): () => void
   onError(callback: (message: string) => void): () => void
+  onProvider(callback: (auth: AuthInfo) => void): () => void
 
   windowControl(action: 'minimize' | 'close'): void
   /** Whether the pointer is over UI (clicks handled) or empty space (clicks pass through). */
