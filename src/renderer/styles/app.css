@@ -588,3 +588,9 @@ button:disabled {
 .sd-hint a {
   color: var(--text-dim);
 }
+.su-cookies {
+  min-height: 70px;
+  resize: vertical;
+  font-family: monospace;
+  font-size: 10px;
+}

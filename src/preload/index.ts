@@ -24,6 +24,7 @@ const methods = [
   'setCredentials',
   'getSettings',
   'setProvider',
+  'importYouTubeSession',
   'setSkin',
   'searchSkins',
   'getLikedTracks',

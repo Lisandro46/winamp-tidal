@@ -48,17 +48,66 @@ const STATUS_SCRIPT = `(() => {
   }
 })()`
 
-/** A regular Chrome user agent: Google refuses to sign in "embedded" browsers that say Electron. */
+/** A regular Chrome user agent, without the "Electron/…" token. */
 const chromeUserAgent = (): string =>
   `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`
+
+/**
+ * Google refuses to sign in embedded Chromium ("This browser or app may not be
+ * secure"), even with a plain Chrome user agent, but accepts Firefox. During the
+ * sign-in the window presents itself as Firefox and drops Chromium's client hints.
+ */
+const FIREFOX_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0'
+const GOOGLE_URLS = ['https://accounts.google.com/*', 'https://*.google.com/*', 'https://accounts.youtube.com/*']
+
+/** youtube.com cookies from a "cookie:" header, a Netscape cookies.txt or a JSON array export. */
+export function parseCookies(text: string): { name: string; value: string }[] {
+  const input = text.trim()
+  if (input.startsWith('[')) {
+    try {
+      const list = JSON.parse(input) as { name?: string; value?: string; domain?: string }[]
+      return list
+        .filter((c) => c.name && c.value != null && (!c.domain || c.domain.includes('youtube.com')))
+        .map((c) => ({ name: c.name!, value: c.value! }))
+    } catch {
+      return []
+    }
+  }
+  if (/\t/.test(input)) {
+    return input
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^#HttpOnly_/, '').split('\t'))
+      .filter((f) => f.length >= 7 && f[0].includes('youtube.com'))
+      .map((f) => ({ name: f[5], value: f[6].trim() }))
+  }
+  return input
+    .replace(/^cookie:\s*/i, '')
+    .split(/;\s*/)
+    .map((pair) => {
+      const at = pair.indexOf('=')
+      return at > 0 ? { name: pair.slice(0, at).trim(), value: pair.slice(at + 1).trim() } : undefined
+    })
+    .filter((c): c is { name: string; value: string } => c != null && /^[\w.-]+$/.test(c.name))
+}
 
 export class YtPlayerWindow {
   readonly session: Session = sessions.fromPartition(PARTITION)
   private window: BrowserWindow | undefined
   private ready: Promise<void> | undefined
 
+  /** True while the sign-in window is open. */
+  private signingIn = false
+
   constructor() {
     this.session.setUserAgent(chromeUserAgent())
+    this.session.webRequest.onBeforeSendHeaders({ urls: GOOGLE_URLS }, (details, callback) => {
+      if (!this.signingIn) return callback({ requestHeaders: details.requestHeaders })
+      const headers = Object.fromEntries(
+        Object.entries(details.requestHeaders).filter(([name]) => !/^sec-ch-ua/i.test(name))
+      )
+      headers['User-Agent'] = FIREFOX_USER_AGENT
+      callback({ requestHeaders: headers })
+    })
   }
 
   private create(): BrowserWindow {
@@ -163,14 +212,51 @@ export class YtPlayerWindow {
       window.once('hide', onHide)
       void check()
     })
+    this.signingIn = true
+    window.webContents.setUserAgent(FIREFOX_USER_AGENT)
     window.center()
     window.show()
     await window.loadURL(LOGIN)
     try {
       await done
     } finally {
+      this.signingIn = false
+      window.webContents.setUserAgent(chromeUserAgent())
       if (window.isVisible()) window.hide()
     }
+    await this.session.cookies.flushStore()
+    await this.ensure()
+  }
+
+  /**
+   * Signs in with the session of the user's own browser, for accounts Google
+   * won't sign in here (passkey-only). `text` is the music.youtube.com cookies
+   * as a "cookie:" request header, a cookies.txt export or a JSON export.
+   */
+  async importCookies(text: string): Promise<void> {
+    const cookies = parseCookies(text)
+    if (!cookies.some((c) => /^(__Secure-3PAPISID|SAPISID)$/.test(c.name))) {
+      throw new Error('Eso no tiene la sesión de YouTube (falta la cookie SAPISID). Revisá que estés logueado y copiá todo.')
+    }
+    const expirationDate = Date.now() / 1000 + 365 * 24 * 3600
+    for (const { name, value } of cookies) {
+      await this.session.cookies.set({
+        url: HOME,
+        domain: '.youtube.com',
+        path: '/',
+        name,
+        value,
+        secure: true,
+        httpOnly: !/PAPISID$|^SAPISID$/.test(name),
+        sameSite: 'no_restriction',
+        expirationDate
+      })
+    }
+    // Chromium writes cookies to disk lazily; don't lose the session if the app is killed.
+    await this.session.cookies.flushStore()
+    // Reload music.youtube.com with the new session (also closes a pending sign-in window).
+    this.window?.hide()
+    this.ready = undefined
     await this.ensure()
   }
 
@@ -181,6 +267,7 @@ export class YtPlayerWindow {
   }
 
   dispose(): void {
+    void this.session.cookies.flushStore()
     const window = this.window
     this.window = undefined
     this.ready = undefined

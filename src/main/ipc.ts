@@ -5,6 +5,7 @@ import { Equalizer } from './audio/equalizer'
 import { createProvider } from './providers'
 import { TidalProvider } from './providers/tidal'
 import type { MusicProvider } from './providers/types'
+import { YtMusicProvider } from './providers/ytmusic'
 import { searchSkins } from './skins'
 import { smtc } from './smtc/helperClient'
 import { openVisualizer, visualizerWindow } from './visualizerWindow'
@@ -77,6 +78,12 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('setCredentials', async (credentials: TidalCredentials | null) => {
     await tidal().setCredentials(credentials)
     settingsStore.update({ setupDone: true })
+    await provider.loadLiked().catch(() => undefined)
+    return auth()
+  })
+  handle('importYouTubeSession', async (text: string) => {
+    if (!(provider instanceof YtMusicProvider)) throw new Error('Esto solo aplica a YouTube Music')
+    await provider.importSession(text)
     await provider.loadLiked().catch(() => undefined)
     return auth()
   })

@@ -32,6 +32,8 @@ interface Item {
 }
 
 const MAX_PLAYLIST_PAGES = 10
+/** Home page sections to look through for the user's mixes. */
+const HOME_PAGES = 4
 const NEEDS_LOGIN = 'Iniciá sesión en YouTube Music para ver tu biblioteca'
 
 const text = (value: string | Text | undefined): string => (value == null ? '' : String(value)).trim()
@@ -208,13 +210,19 @@ export class YtCatalog {
   async mixes(): Promise<Collection[]> {
     this.ensureLogin()
     const yt = await this.yt()
-    const home = await yt.music.getHomeFeed()
-    const sections = (home.sections ?? []) as { header?: { title?: Text }; contents?: Item[] }[]
-    const items = sections
-      .filter((s) => /mix/i.test(text(s.header?.title)))
-      .flatMap((s) => s.contents ?? [])
-      .filter((i) => KIND_OF[i.item_type ?? ''] === 'playlist' || i.id?.startsWith('RD'))
-    return collectionsOf(items, 'mix')
+    // The mixes shelf is usually a few sections down the home page.
+    let home = await yt.music.getHomeFeed()
+    const sections = [...(home.sections ?? [])] as { header?: { title?: Text }; contents?: Item[] }[]
+    for (let page = 1; page < HOME_PAGES && home.has_continuation; page++) {
+      home = await home.getContinuation()
+      sections.push(...((home.sections ?? []) as typeof sections))
+    }
+    const isPlaylist = (i: Item): boolean => KIND_OF[i.item_type ?? ''] === 'playlist' || !!i.id?.startsWith('RD')
+    const items = sections.flatMap((s) =>
+      (s.contents ?? []).filter((i) => isPlaylist(i) && (/mix/i.test(text(s.header?.title)) || /mix/i.test(text(i.title))))
+    )
+    const unique = [...new Map(items.map((i) => [i.id, i])).values()]
+    return collectionsOf(unique, 'mix')
   }
 
   async setLiked(videoId: string, liked: boolean): Promise<void> {

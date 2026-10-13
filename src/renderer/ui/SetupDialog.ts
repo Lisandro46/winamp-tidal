@@ -116,10 +116,79 @@ export class SetupDialog {
         'div',
         { className: 'su-buttons' },
         el('button', { textContent: '◂ Volver', onclick: () => void this.open() }),
-        ...(connected ? [] : [login]),
+        ...(connected
+          ? []
+          : [
+              login,
+              el('button', {
+                textContent: 'Usar la sesión de mi navegador…',
+                title: 'Si Google te pide una llave de acceso (passkey) o no te deja entrar acá',
+                onclick: () => this.renderCookieImport()
+              })
+            ]),
         el('button', { textContent: connected ? 'Cerrar' : 'Más tarde', onclick: () => this.close() })
       )
     )
+  }
+
+  /** For accounts Google won't sign in here (passkey-only): reuse the browser's session. */
+  private renderCookieImport(): void {
+    this.heading.textContent = 'YOUTUBE MUSIC · SESIÓN DEL NAVEGADOR'
+    const input = el('textarea', {
+      className: 'ml-search su-cookies',
+      placeholder: 'Pegá acá el valor de "cookie" (o el archivo cookies.txt)',
+      spellcheck: false
+    })
+    const save = el('button', { textContent: 'Conectar' })
+    save.onclick = () => {
+      save.disabled = true
+      save.textContent = 'Conectando…'
+      window.remote
+        .importYouTubeSession(input.value)
+        .then(() => {
+          document.dispatchEvent(new CustomEvent('auth:changed'))
+          this.close()
+        })
+        .catch((error) => this.showError(error))
+        .finally(() => {
+          save.disabled = false
+          save.textContent = 'Conectar'
+        })
+    }
+    this.body.replaceChildren(
+      el(
+        'ol',
+        { className: 'su-steps' },
+        el(
+          'li',
+          {},
+          'En Chrome o Edge, abrí ',
+          el('a', { href: 'https://music.youtube.com', target: '_blank', textContent: 'music.youtube.com' }),
+          ' con tu cuenta iniciada.'
+        ),
+        el('li', {}, 'Apretá F12, andá a la pestaña "Red" (Network) y recargá la página con F5.'),
+        el('li', {}, 'Escribí "browse" en el filtro y hacé clic en el primer resultado.'),
+        el(
+          'li',
+          {},
+          'En "Encabezados de solicitud" (Request Headers) buscá "cookie", clic derecho → Copiar valor, y pegalo acá:'
+        )
+      ),
+      input,
+      el(
+        'div',
+        { className: 'su-note' },
+        'Es tu sesión de YouTube: se guarda solo en esta PC y no se comparte con nadie. Si cerrás sesión en el navegador, acá también se corta.'
+      ),
+      el('div', { className: 'su-error' }),
+      el(
+        'div',
+        { className: 'su-buttons' },
+        el('button', { textContent: '◂ Volver', onclick: () => this.renderYouTube(false) }),
+        save
+      )
+    )
+    input.focus()
   }
 
   private showError(error: unknown): void {

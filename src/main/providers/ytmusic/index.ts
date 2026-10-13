@@ -49,6 +49,11 @@ export class YtMusicProvider implements MusicProvider {
     await this.window.login()
     await this.refreshCookie()
   }
+  /** Signs in with cookies copied from the user's browser (see YtPlayerWindow.importCookies). */
+  async importSession(text: string): Promise<void> {
+    await this.window.importCookies(text)
+    await this.refreshCookie()
+  }
   async logout(): Promise<void> {
     await this.window.logout()
     await this.refreshCookie()

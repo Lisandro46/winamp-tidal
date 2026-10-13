@@ -145,6 +145,8 @@ export interface RemoteApi {
   getSettings(): Promise<AppSettings>
   /** Switches the music service; the Winamp playlist should be cleared. */
   setProvider(provider: ProviderId): Promise<AuthInfo>
+  /** YouTube Music sign-in with the cookies of the user's own browser (passkey-only accounts). */
+  importYouTubeSession(cookies: string): Promise<AuthInfo>
   setSkin(url: string | undefined): Promise<void>
   /** Classic skins from the Winamp Skin Museum. */
   searchSkins(query: string): Promise<MuseumSkin[]>
