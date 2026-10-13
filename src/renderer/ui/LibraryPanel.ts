@@ -54,6 +54,11 @@ export class LibraryPanel {
           title: 'Solo control remoto, o buscar en TIDAL (modo catálogo)',
           onclick: () => document.dispatchEvent(new CustomEvent('setup:open'))
         }),
+        el('button', {
+          textContent: 'Milkdrop',
+          title: 'Mostrar/ocultar el visualizador · doble clic en él para pantalla completa',
+          onclick: () => document.dispatchEvent(new CustomEvent('milkdrop:toggle'))
+        }),
         el('button', { textContent: 'Skin…', title: 'Cargar un skin .wsz', onclick: () => skins.pick() }),
         el('button', { textContent: 'Skin base', title: 'Volver al skin clásico', onclick: () => skins.reset() }),
         el('button', { textContent: 'A−', title: 'Achicar todo (Ctrl −)', onclick: () => window.remote.scaleWindow('out') }),

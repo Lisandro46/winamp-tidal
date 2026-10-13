@@ -7,6 +7,7 @@
  */
 
 import type { PcmChunk } from '@shared/types'
+import { PcmAnalyser } from './pcmAnalyser'
 
 export interface RemoteMediaHandlers {
   play(): void
@@ -22,8 +23,6 @@ export interface RemoteMediaHandlers {
 type Listener = () => void
 
 const VOLUME_DEBOUNCE_MS = 60
-/** Small buffer so captured audio chunks play back-to-back without gaps. */
-const PCM_LATENCY_S = 0.05
 
 let handlers: RemoteMediaHandlers | undefined
 let instance: RemoteMedia | undefined
@@ -58,9 +57,7 @@ export class RemoteMedia {
   private volumeTimer: ReturnType<typeof setTimeout> | undefined
   private clock: ReturnType<typeof setInterval>
 
-  private context = new AudioContext()
-  private analyser = this.context.createAnalyser()
-  private nextPcmTime = 0
+  private pcm = new PcmAnalyser()
 
   constructor() {
     instance = this
@@ -84,26 +81,9 @@ export class RemoteMedia {
     this.trigger('timeupdate')
   }
 
-  /**
-   * Plays captured system audio into the analyser only (never to the speakers),
-   * so Webamp's spectrum and oscilloscope react to what TIDAL is playing.
-   */
-  feedPcm({ rate, data }: PcmChunk): void {
-    const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0))
-    const samples = new Int16Array(bytes.buffer, 0, bytes.length >> 1)
-    if (!samples.length) return
-    const buffer = this.context.createBuffer(1, samples.length, rate)
-    const channel = buffer.getChannelData(0)
-    for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768
-
-    const source = this.context.createBufferSource()
-    source.buffer = buffer
-    source.connect(this.analyser)
-    const now = this.context.currentTime
-    // Resync when we fell behind (e.g. the window was hidden).
-    if (this.nextPcmTime < now || this.nextPcmTime > now + 0.5) this.nextPcmTime = now + PCM_LATENCY_S
-    source.start(this.nextPcmTime)
-    this.nextPcmTime += buffer.duration
+  /** Feeds the visualizers (spectrum, oscilloscope, Milkdrop) with captured system audio. */
+  feedPcm(chunk: PcmChunk): void {
+    this.pcm.feed(chunk)
   }
 
   // ---- IMedia ----------------------------------------------------------------
@@ -126,7 +106,7 @@ export class RemoteMedia {
   }
 
   async play(): Promise<void> {
-    void this.context.resume()
+    this.pcm.resume()
     if (!syncing) handlers?.play()
   }
 
@@ -156,7 +136,7 @@ export class RemoteMedia {
   }
 
   getAnalyser(): AnalyserNode {
-    return this.analyser
+    return this.pcm.analyser
   }
 
   // The equalizer is applied system-wide by Equalizer APO; balance can't be.
@@ -176,7 +156,7 @@ export class RemoteMedia {
 
   dispose(): void {
     clearInterval(this.clock)
-    void this.context.close()
+    this.pcm.close()
     this.listeners.clear()
   }
 }

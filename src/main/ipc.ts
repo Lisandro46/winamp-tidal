@@ -5,11 +5,17 @@ import { Equalizer } from './audio/equalizer'
 import { smtc } from './smtc/helperClient'
 import { TidalApi } from './tidal/api'
 import { TidalPlayer } from './tidal/player'
+import { openVisualizer, visualizerWindow } from './visualizerWindow'
 
 /** Wires the renderer's `window.remote` API to TIDAL, the Windows helper and the equalizer. */
 export function registerIpc(window: BrowserWindow): () => void {
   const send = (channel: string, payload: unknown): void => {
     if (!window.isDestroyed()) window.webContents.send(channel, payload)
+  }
+  // The full-screen Milkdrop also follows the audio and the current track.
+  const broadcast = (channel: string, payload: unknown): void => {
+    send(channel, payload)
+    visualizerWindow()?.webContents.send(channel, payload)
   }
   const api = new TidalApi()
   const player = new TidalPlayer(api, (ids) => send('remote:liked', ids))
@@ -95,6 +101,14 @@ export function registerIpc(window: BrowserWindow): () => void {
     return equalizer.apply(state)
   })
 
+  // `point` is in the main window's CSS pixels (the page is zoomed by the UI scale).
+  handle('openVisualizer', (point: { x: number; y: number }, preset?: string) => {
+    const bounds = window.getBounds()
+    const zoom = window.webContents.getZoomFactor()
+    openVisualizer({ x: Math.round(bounds.x + point.x * zoom), y: Math.round(bounds.y + point.y * zoom) }, preset)
+    visualizer(true)
+  })
+
   ipcMain.on('window:control', (_event, action: 'minimize' | 'close') => {
     if (action === 'minimize') window.minimize()
     else window.close()
@@ -102,7 +116,7 @@ export function registerIpc(window: BrowserWindow): () => void {
 
   // The visualizer only needs audio while the window can be seen.
   const visualizer = (on: boolean): void => void smtc.setVisualizer(on).catch(() => undefined)
-  window.on('minimize', () => visualizer(false))
+  window.on('minimize', () => visualizer(visualizerWindow() != null))
   window.on('restore', () => visualizer(true))
 
   // The renderer calls `ready` once its listeners exist (also after a reload),
@@ -115,9 +129,9 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('ready', () => {
     stopAll()
     stops.push(
-      player.watch((state) => send('remote:state', state)),
+      player.watch((state) => broadcast('remote:state', state)),
       smtc.onVolume((volume) => send('remote:volume', volume)),
-      smtc.onPcm((chunk) => send('remote:pcm', chunk))
+      smtc.onPcm((chunk) => broadcast('remote:pcm', chunk))
     )
     visualizer(true)
     void player.loadLiked().catch(() => undefined)

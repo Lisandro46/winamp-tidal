@@ -150,6 +150,8 @@ export interface RemoteApi {
   setEq(state: EqState): Promise<EqStatus>
   /** Call once all listeners are registered; starts state, volume and audio updates. */
   ready(): Promise<void>
+  /** Milkdrop full screen on the monitor under `point` (main window CSS pixels). */
+  openVisualizer(point: { x: number; y: number }, preset?: string): Promise<void>
 
   onState(callback: (state: PlaybackState | null) => void): () => void
   onVolume(callback: (volume: SystemVolume) => void): () => void

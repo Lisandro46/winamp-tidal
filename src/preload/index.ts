@@ -43,7 +43,8 @@ const methods = [
   'setVolume',
   'getEq',
   'setEq',
-  'ready'
+  'ready',
+  'openVisualizer'
 ] as const
 
 const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error' } as const

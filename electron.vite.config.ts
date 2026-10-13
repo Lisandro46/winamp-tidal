@@ -13,6 +13,10 @@ export default defineConfig({
   renderer: {
     root: 'src/renderer',
     resolve: { alias: { '@shared': resolve('src/shared') } },
-    build: { rollupOptions: { input: resolve('src/renderer/index.html') } }
+    build: {
+      rollupOptions: {
+        input: { index: resolve('src/renderer/index.html'), visualizer: resolve('src/renderer/visualizer.html') }
+      }
+    }
   }
 })

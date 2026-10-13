@@ -1,4 +1,5 @@
-import Webamp from 'webamp'
+// Webamp plus the Milkdrop (Butterchurn) window and its built-in presets.
+import Webamp from 'webamp/butterchurn'
 import './styles/app.css'
 import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
@@ -41,6 +42,33 @@ function skinActions(webamp: Webamp): SkinActions {
   }
 }
 
+interface MilkdropState {
+  display: 'WINDOW' | 'DESKTOP' | 'FULLSCREEN'
+  presets: { name: string }[]
+  currentPresetIndex: number | null
+}
+
+/**
+ * Milkdrop's own full screen would enlarge this overlay across every monitor,
+ * so it opens a separate full-screen window on the monitor under the Milkdrop window.
+ */
+function redirectMilkdropFullscreen(webamp: Webamp): void {
+  const store = webamp.store as unknown as {
+    getState(): { milkdrop: MilkdropState }
+    dispatch(action: object): void
+    subscribe(listener: () => void): () => void
+  }
+  store.subscribe(() => {
+    const milkdrop = store.getState().milkdrop
+    if (milkdrop.display !== 'FULLSCREEN') return
+    store.dispatch({ type: 'SET_MILKDROP_FULLSCREEN', enabled: false })
+    const rect = document.querySelector('#webamp .gen-window')?.getBoundingClientRect()
+    const point = rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 }
+    const preset = milkdrop.currentPresetIndex != null ? milkdrop.presets[milkdrop.currentPresetIndex]?.name : undefined
+    void window.remote.openVisualizer(point, preset)
+  })
+}
+
 async function main(): Promise<void> {
   if (!Webamp.browserIsSupported()) {
     document.body.textContent = 'Webamp no es compatible con este entorno.'
@@ -61,6 +89,10 @@ async function main(): Promise<void> {
     window.remote.windowControl('close')
   })
   webamp.onMinimize(() => window.remote.windowControl('minimize'))
+  redirectMilkdropFullscreen(webamp)
+  document.addEventListener('milkdrop:toggle', () =>
+    webamp.store.dispatch({ type: 'TOGGLE_WINDOW', windowId: 'milkdrop' } as Parameters<typeof webamp.store.dispatch>[0])
+  )
 
   let library: LibraryPanel | undefined
   const controller = new RemoteController(webamp, (status) => library?.setEqStatus(status))
