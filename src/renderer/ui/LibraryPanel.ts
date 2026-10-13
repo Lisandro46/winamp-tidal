@@ -4,11 +4,6 @@ import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
 import { collectionRow, el, heartButton, refreshHearts, trackRow } from './rows'
 
-export interface SkinActions {
-  pick(): void
-  reset(): void
-}
-
 type View =
   | { kind: 'liked' }
   | { kind: 'section'; section: Section }
@@ -39,8 +34,7 @@ export class LibraryPanel {
 
   constructor(
     root: HTMLElement,
-    private readonly controller: RemoteController,
-    skins: SkinActions
+    private readonly controller: RemoteController
   ) {
     const titlebar = el(
       'div',
@@ -59,8 +53,11 @@ export class LibraryPanel {
           title: 'Mostrar/ocultar el visualizador · doble clic en él para pantalla completa',
           onclick: () => document.dispatchEvent(new CustomEvent('milkdrop:toggle'))
         }),
-        el('button', { textContent: 'Skin…', title: 'Cargar un skin .wsz', onclick: () => skins.pick() }),
-        el('button', { textContent: 'Skin base', title: 'Volver al skin clásico', onclick: () => skins.reset() }),
+        el('button', {
+          textContent: 'Skins…',
+          title: 'Elegir un skin: destacados, Skin Museum o un .wsz propio',
+          onclick: () => document.dispatchEvent(new CustomEvent('skins:open'))
+        }),
         el('button', { textContent: 'A−', title: 'Achicar todo (Ctrl −)', onclick: () => window.remote.scaleWindow('out') }),
         el('button', { textContent: 'A+', title: 'Agrandar todo (Ctrl +) · Ctrl 0 vuelve a 100%', onclick: () => window.remote.scaleWindow('in') }),
         el('button', { textContent: '×', title: 'Ocultar (L)', onclick: () => root.classList.add('hidden') })

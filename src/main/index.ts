@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, screen, shell, type Rectangle } from 'elec
 import type { DesktopLayout } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { registerIpc } from './ipc'
+import { handleSkinScheme, registerSkinScheme } from './skins'
 import { smtc } from './smtc/helperClient'
 
 /** Bounding box of every monitor's work area (the window spans all of them). */
@@ -126,7 +127,11 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(createWindow)
+registerSkinScheme()
+app.whenReady().then(() => {
+  handleSkinScheme()
+  createWindow()
+})
 app.on('window-all-closed', () => {
   smtc.stop()
   app.quit()

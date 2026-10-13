@@ -24,6 +24,7 @@ const methods = [
   'setCredentials',
   'getSettings',
   'setSkin',
+  'searchSkins',
   'getLikedTracks',
   'getPlaylists',
   'getMixes',

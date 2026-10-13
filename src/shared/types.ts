@@ -1,5 +1,7 @@
 // Types shared by the main process, preload and renderer.
 
+import type { MuseumSkin } from './skins'
+
 export interface Track {
   id: string
   title: string
@@ -125,6 +127,8 @@ export interface RemoteApi {
   setCredentials(credentials: TidalCredentials | null): Promise<AuthInfo>
   getSettings(): Promise<AppSettings>
   setSkin(url: string | undefined): Promise<void>
+  /** Classic skins from the Winamp Skin Museum. */
+  searchSkins(query: string): Promise<MuseumSkin[]>
 
   getLikedTracks(): Promise<Track[]>
   getPlaylists(): Promise<Collection[]>

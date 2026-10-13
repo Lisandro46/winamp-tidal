@@ -70,7 +70,8 @@ button:disabled {
 }
 #library.hidden,
 #tidal-search.hidden,
-#tidal-setup.hidden {
+#tidal-setup.hidden,
+#skins.hidden {
   display: none;
 }
 .ml-titlebar {
@@ -414,7 +415,8 @@ button:disabled {
   border: 2px solid var(--bevel-light);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
 }
-#tidal-search > :not(.ml-titlebar) {
+#tidal-search > :not(.ml-titlebar),
+#skins > :not(.ml-titlebar) {
   margin: 0 6px;
 }
 .sd-top {
@@ -527,4 +529,62 @@ button:disabled {
 .su-buttons {
   display: flex;
   justify-content: space-between;
+}
+
+/* ---- Skins (featured + Winamp Skin Museum) ---- */
+#skins {
+  position: fixed;
+  left: 30%;
+  top: 15%;
+  width: 640px;
+  height: 560px;
+  min-width: 360px;
+  min-height: 300px;
+  resize: both;
+  overflow: hidden;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
+  background: var(--panel);
+  border: 2px solid var(--bevel-light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+}
+.sk-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  padding: 8px;
+  align-content: start;
+}
+.sk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.sk-card img {
+  width: 100%;
+  aspect-ratio: 275 / 348;
+  object-fit: contain;
+  object-position: top;
+  background: #000;
+  image-rendering: pixelated;
+}
+.sk-card span {
+  font-size: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sk-card.active {
+  outline: 2px solid var(--selected);
+}
+.sd-hint a {
+  color: var(--text-dim);
 }

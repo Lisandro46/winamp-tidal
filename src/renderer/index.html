@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' data: blob: ws://localhost:*; media-src 'self' data: blob:"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' data: blob: skin: ws://localhost:*; media-src 'self' data: blob:"
     />
     <title>Winamp Remote</title>
   </head>
@@ -13,6 +13,7 @@
     <aside id="library"></aside>
     <aside id="tidal-search" class="hidden"></aside>
     <aside id="tidal-setup" class="hidden"></aside>
+    <aside id="skins" class="hidden"></aside>
     <input id="skin-file" type="file" accept=".wsz,.zip" hidden />
     <div id="toast" role="status"></div>
     <script type="module" src="./main.ts"></script>

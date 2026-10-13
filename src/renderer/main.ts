@@ -3,7 +3,8 @@ import Webamp from 'webamp/butterchurn'
 import './styles/app.css'
 import { getRemoteMedia, RemoteMedia } from './webamp/RemoteMedia'
 import { RemoteController } from './webamp/controller'
-import { LibraryPanel, type SkinActions } from './ui/LibraryPanel'
+import { LibraryPanel } from './ui/LibraryPanel'
+import { SkinDialog, type SkinActions } from './ui/SkinDialog'
 import { SearchDialog } from './ui/SearchDialog'
 import { SetupDialog } from './ui/SetupDialog'
 import { favorites } from './ui/library'
@@ -20,20 +21,21 @@ function showToast(message: string): void {
 }
 
 function skinActions(webamp: Webamp): SkinActions {
+  const apply = (url: string): void => {
+    webamp.setSkinFromUrl(url)
+    void window.remote.setSkin(url)
+  }
   const fileInput = $<HTMLInputElement>('#skin-file')
   fileInput.onchange = () => {
     const file = fileInput.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = String(reader.result)
-      webamp.setSkinFromUrl(dataUrl)
-      void window.remote.setSkin(dataUrl)
-    }
+    reader.onload = () => apply(String(reader.result))
     reader.readAsDataURL(file)
     fileInput.value = ''
   }
   return {
+    apply,
     pick: () => fileInput.click(),
     reset: () => {
       void window.remote.setSkin(undefined)
@@ -111,6 +113,7 @@ async function main(): Promise<void> {
     updateLayout($('#stage'), $('#library'), next)
     keepOnScreen($('#tidal-search'))
     keepOnScreen($('#tidal-setup'))
+    keepOnScreen($('#skins'))
     // After a zoom change windows may have grown past the screen edge.
     requestAnimationFrame(recheckWebamp)
     if (next.scale !== scale) showToast(`Tamaño ${Math.round(next.scale * 100)}%`)
@@ -121,7 +124,8 @@ async function main(): Promise<void> {
   await webamp.renderWhenReady($('#stage'))
   controller.restoreEq(settings.eq)
 
-  library = new LibraryPanel($('#library'), controller, skinActions(webamp))
+  library = new LibraryPanel($('#library'), controller)
+  new SkinDialog($('#skins'), skinActions(webamp), settings.skinUrl)
   new SearchDialog($('#tidal-search'), controller)
   const setup = new SetupDialog($('#tidal-setup'))
   window.remote.onLiked((ids) => favorites.set(ids))

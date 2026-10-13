@@ -6,7 +6,7 @@
 import type { DesktopLayout, Rect } from '@shared/types'
 
 /** UI that should receive the mouse; everything else is click-through. */
-const INTERACTIVE = '#webamp, #library:not(.hidden), #tidal-search:not(.hidden), #tidal-setup:not(.hidden), [id^="webamp-"]'
+const INTERACTIVE = '#webamp, #library:not(.hidden), #tidal-search:not(.hidden), #tidal-setup:not(.hidden), #skins:not(.hidden), [id^="webamp-"]'
 
 export function trackPointer(): void {
   let interactive: boolean | undefined

@@ -2,6 +2,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { AuthInfo, Collection, EqState, PlayContext, TidalCredentials, Track } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { Equalizer } from './audio/equalizer'
+import { searchSkins } from './skins'
 import { smtc } from './smtc/helperClient'
 import { TidalApi } from './tidal/api'
 import { TidalPlayer } from './tidal/player'
@@ -75,6 +76,8 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('setSkin', (url: string | undefined) => {
     settingsStore.update({ skinUrl: url })
   })
+
+  handle('searchSkins', (query: string) => searchSkins(query))
 
   handle('getLikedTracks', library(() => api.likedTracks()))
   handle('getPlaylists', library(() => api.userPlaylists()))
