@@ -1,7 +1,7 @@
 {
   "name": "winamp-tidal",
-  "version": "1.0.1",
-  "description": "Winamp 2 (Webamp) como control remoto de la app de escritorio de TIDAL",
+  "version": "1.1.0",
+  "description": "Winamp 2 (Webamp) para TIDAL y YouTube Music",
   "main": "out/main/index.js",
   "author": "Lisandro Arrigoni",
   "license": "MIT",
@@ -44,10 +44,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "Winamp-Remote-TIDAL-Setup-${version}.${ext}"
+      "artifactName": "Winamp-Remote-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "Winamp-Remote-TIDAL-Portable-${version}.${ext}"
+      "artifactName": "Winamp-Remote-Portable-${version}.${ext}"
     }
   },
   "devDependencies": {
