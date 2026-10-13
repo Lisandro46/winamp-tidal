@@ -166,7 +166,8 @@ export class YtCatalog {
       if (all) return this.playlistTracks(all, 2).catch(() => tracksOf(shelf?.contents, collection.name))
       return tracksOf(shelf?.contents, collection.name)
     }
-    return this.playlistTracks(collection.id)
+    // Mixes are endless radios: a couple of pages is plenty.
+    return this.playlistTracks(collection.id, collection.kind === 'mix' ? 2 : MAX_PLAYLIST_PAGES)
   }
 
   // ---- Library (needs the login) ------------------------------------------------
