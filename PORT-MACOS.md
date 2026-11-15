@@ -158,6 +158,12 @@ Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "meta
 
 - Resolver la necesidad de correr `xattr -cr` a mano tras instalar. Opciones: firmar con Developer ID y notarizar, o documentar un flujo claro de instalación.
 
+### Milkdrop apagado por defecto y vista guardada
+
+- Milkdrop debe arrancar **cerrado**; solo se muestra cuando el usuario lo activa (botón Milkdrop o menú Ver).
+- Guardar y restaurar cómo el usuario ve el Winamp: qué ventanas están abiertas (principal, ecualizador, playlist, Milkdrop), el modo *shade* de cada una, el tamaño de la playlist y de Milkdrop, y si la Media Library está visible. El skin ya se guarda hoy (`skinUrl`).
+- Idea: pasar `windowLayout` a Webamp al crearlo (con `milkdrop` cerrado salvo que el usuario lo haya abierto) y suscribirse al store para guardar los cambios en `settings.json`.
+
 ### Documentación
 
 - Actualizar el `README.md` con los cambios del port a macOS (instalación, permisos, diferencias con Windows) para poder abrir un Pull Request al repositorio original y dejar documentado lo hecho.
