@@ -6,6 +6,7 @@ import { registerIpc } from './ipc'
 import { handleSkinScheme, registerSkinScheme } from './skins'
 import { audio } from './platform'
 import { installMacMenu } from './menu'
+import { applyDockIcon, windowIcon } from './appIcon'
 
 /** macOS can't span one window across monitors: the floating overlay covers only the primary one there. */
 const isMac = process.platform === 'darwin'
@@ -77,6 +78,7 @@ function createWindow(): void {
     maximizable: false,
     fullscreenable: false,
     title: 'Winamp Remote',
+    ...windowIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -169,6 +171,7 @@ function createWindow(): void {
 registerSkinScheme()
 app.whenReady().then(() => {
   handleSkinScheme()
+  applyDockIcon()
   createWindow()
 })
 app.on('window-all-closed', () => {

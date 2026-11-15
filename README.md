@@ -74,13 +74,42 @@ El botón **Milkdrop** muestra u oculta el visualizador clásico, con cientos de
 
 El ecualizador del Winamp ecualiza el sonido de **todo Windows** usando [Equalizer APO](https://sourceforge.net/projects/equalizerapo/) (gratis). Instalalo, marcá tu dispositivo de salida (parlantes o auriculares) y reiniciá si te lo pide. Sin Equalizer APO todo lo demás funciona igual.
 
+## macOS (Apple Silicon)
+
+Port a macOS con **YouTube Music** completo. TIDAL no está disponible en Mac porque no hay un equivalente a los controles multimedia de Windows. En Windows todo sigue igual.
+
+### Instalar
+
+1. Descargá `Winamp-Remote-Mac.dmg` (o armalo vos, ver más abajo), abrilo y arrastrá **Winamp Remote** a *Aplicaciones*.
+2. Abrila. Está firmada de forma *ad-hoc* (sin Apple Developer ID), así que si la instalás desde un `.dmg` que armaste vos no pasa nada. Si la **descargaste** de internet, macOS la bloquea la primera vez: hacé clic derecho sobre la app → **Abrir** → **Abrir**, o andá a *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*. Con un certificado de Apple Developer ID y notarización ese paso desaparece.
+
+### Cómo funciona en Mac
+
+- **Ventana:** no hay ventana contenedora. La ventana mide exactamente lo que se ve (Winamp, y la Media Library acoplada a su derecha). Se mueve arrastrando la barra de título de cualquier panel, también a otro monitor, y se comporta como una app normal para el foco y Mission Control.
+- **Menú nativo:** **Cuenta** (iniciar o cerrar sesión, cambiar de cuenta) y **Ver** (biblioteca `L`, buscar `J`, skins, Milkdrop).
+- **Audio:** el sonido sale de la ventana oculta de YouTube Music a través de un grafo de **Web Audio**: ecualizador de 10 bandas, preamp, volumen y el audio real para el visualizador, sin instalar nada. El volumen es el del programa, no el del sistema.
+- **Teclas multimedia:** play/pausa, siguiente y anterior del teclado y de "Está sonando" en el Centro de Control manejan la cola de la app.
+- **Inicio de sesión:** **Iniciar sesión** (o *Cuenta → Iniciar sesión*) usa la sesión de **tu navegador por defecto**. Si ya tenés YouTube Music abierto con tu cuenta, entra directo. Si no, abre `music.youtube.com` en tu navegador y espera a que inicies sesión. Funciona con Chrome, Brave, Edge, Arc, Firefox y Safari. macOS te va a pedir permiso para leer el Llavero ("… Safe Storage"); para Safari hace falta además **Acceso total al disco** en *Ajustes del Sistema → Privacidad y seguridad*. Las cookies se leen solo en tu Mac y se guardan en la sesión de la app.
+- **Varias cuentas:** si tu correo tiene más de una cuenta o canal de YouTube, la app muestra cuál está conectada y *Cuenta → Cambiar de cuenta…* te deja elegir.
+- **Skins:** la Media Library y los diálogos toman los colores del skin de Winamp activo y cambian junto con él.
+
+### Armarlo desde el código
+
+```bash
+npm ci
+npm run dev        # modo desarrollo
+npm run dist:mac   # genera dist/Winamp-Remote-Mac.dmg y .zip (arm64)
+```
+
+Para firmar con tu propio certificado: `npx electron-builder --mac --arm64 -c.mac.identity="Developer ID Application: …"` (y las variables de notarización de electron-builder).
+
 ## Qué hace y qué no (alcance)
 
 | Winamp | Qué controla |
 |---|---|
 | Play / pausa / stop / anterior / siguiente / barra de posición | YouTube Music dentro de la app, o la app de TIDAL por los controles multimedia de Windows |
-| Volumen | El volumen general de Windows (en los dos sentidos) |
-| Ecualizador (10 bandas + preamp, presets) | Equalizer APO, a nivel sistema, con compensación para que no sature |
+| Volumen | El volumen general de Windows (en los dos sentidos). En Mac, el volumen del programa |
+| Ecualizador (10 bandas + preamp, presets) | Equalizer APO a nivel sistema en Windows, con compensación para que no sature. En Mac, Web Audio dentro de la app, sin instalar nada |
 | Visualizador y Milkdrop | El audio real que está sonando |
 | Playlist | Tu cola: lo que agregás desde la Media Library o la búsqueda |
 
@@ -92,7 +121,7 @@ El ecualizador del Winamp ecualiza el sonido de **todo Windows** usando [Equaliz
 
 **Limitaciones:**
 
-- Solo **Windows 10/11 (64 bits)**.
+- **Windows 10/11 (64 bits)** con TIDAL y YouTube Music, o **macOS (Apple Silicon)** solo con YouTube Music.
 - **YouTube Music no tiene API oficial.** La app usa la web de YouTube Music y su API interna. Si YouTube las cambia, algo puede dejar de andar hasta que se actualice la app.
 - **TIDAL necesita la app de escritorio abierta.** El sonido sale de TIDAL; con ese servicio esto es un control remoto.
 - **Tus favoritos, mixes y playlists de TIDAL** todavía no aparecen, porque TIDAL aún no habilitó el login de apps de terceros ([pedido abierto](https://github.com/orgs/tidal-music/discussions/415)).
@@ -151,9 +180,22 @@ A **real Winamp 2** (with `.wsz` skins, via [Webamp](https://github.com/captbari
 - **Milkdrop:** double-click it to go full screen on its monitor.
 - Optional: install [Equalizer APO](https://sourceforge.net/projects/equalizerapo/) for the system-wide equalizer.
 
+### macOS (Apple Silicon)
+
+macOS port with the full **YouTube Music** experience (TIDAL is Windows-only: Mac has no equivalent of the Windows media-control APIs).
+
+- **Install:** open `Winamp-Remote-Mac.dmg` and drag **Winamp Remote** to *Applications*. The app is ad-hoc signed (no Apple Developer ID). A copy you built yourself opens normally; a *downloaded* copy needs right-click → **Open** the first time (or *System Settings → Privacy & Security → Open Anyway*).
+- **Window:** no full-screen overlay. The window is exactly as big as what is visible (Winamp plus the Media Library docked to its right), drags by any panel title bar, including to another display, and behaves like a normal macOS app.
+- **Native menu bar:** **Cuenta** (sign in/out, switch account) and **Ver** (library `L`, search `J`, skins, Milkdrop).
+- **Audio:** a Web Audio graph inside the hidden YouTube Music window provides the 10-band equalizer, preamp, volume and the real audio for the visualizer, with nothing to install. Volume is the app's, not the system's. Keyboard media keys and the Now Playing widget drive the app's queue.
+- **Sign-in:** uses your **default browser's** session. If you are already signed in to YouTube Music it connects immediately; otherwise it opens `music.youtube.com` in your browser and waits. Works with Chrome, Brave, Edge, Arc, Firefox and Safari. macOS asks for Keychain access ("… Safe Storage"); Safari also needs **Full Disk Access**. Cookies are read locally only.
+- **Multiple accounts:** if your email has several YouTube accounts/channels, the app shows which one is connected and *Cuenta → Cambiar de cuenta…* lets you pick.
+- **Skins:** the Media Library and dialogs take their colors from the active Winamp skin.
+- **Build:** `npm ci && npm run dist:mac` writes `dist/Winamp-Remote-Mac.dmg` and `.zip`. To sign with your own certificate: `npx electron-builder --mac --arm64 -c.mac.identity="Developer ID Application: …"`.
+
 ### Scope and limitations
 
-- **Windows 10/11 64-bit** only. The UI is in Spanish.
+- **Windows 10/11 64-bit** (TIDAL and YouTube Music) or **macOS on Apple Silicon** (YouTube Music only). The UI is in Spanish.
 - YouTube Music has no official API. The app relies on its web player and internal API, which YouTube may change at any time.
 - Your TIDAL favorites, mixes and playlists need TIDAL to approve user login for third-party apps ([request](https://github.com/orgs/tidal-music/discussions/415)).
 - Playing a TIDAL track from Winamp starts its album in TIDAL and skips ahead to it, which takes a few seconds.
@@ -174,12 +216,13 @@ A **real Winamp 2** (with `.wsz` skins, via [Webamp](https://github.com/captbari
                                            └────────────────────────────────┘
 ```
 
-Requisitos: Windows 10/11, Node 20+, .NET 8 SDK.
+Requisitos: Node 20+. En Windows, además, Windows 10/11 y .NET 8 SDK. En macOS no hace falta .NET.
 
 ```bash
 npm install
 npm run dev     # compila el helper de Windows y abre la app
 npm run dist    # instalador + portable en dist/ (helper self-contained incluido)
+npm run dist:mac  # macOS: .dmg y .zip en dist/ (arm64)
 ```
 
 - **Proveedores:** `src/main/providers/types.ts` define `MusicProvider`. `ipc.ts` le pasa todas las llamadas del renderer al servicio elegido (`settings.provider`).
@@ -187,6 +230,9 @@ npm run dist    # instalador + portable en dist/ (helper self-contained incluido
   - **Reproducción:** music.youtube.com se carga en una `BrowserWindow` oculta (partición `persist:ytmusic`) y se maneja con su `#movie_player` (`loadVideoById`, `seekTo`…). La cola la lleva la app.
   - **Catálogo y biblioteca:** salen de InnerTube con [youtubei.js](https://github.com/LuanRT/YouTube.js), usando las cookies de esa partición.
   - **Login:** Google bloquea los navegadores embebidos, así que la ventana de login se presenta como Firefox. Como alternativa, el usuario puede importar las cookies de su navegador.
+- **Plataformas:** `src/main/platform/` elige el backend de audio según `process.platform`. En Windows usa `smtc-helper.exe` (volumen del sistema, captura loopback) y Equalizer APO. En macOS inyecta un grafo Web Audio en la ventana oculta de YouTube Music (`ytmusic/player.ts`, preload `ytmusic.ts`) para el ecualizador, el volumen y el PCM del visualizador, y reenvía las teclas multimedia a la cola de la app.
+- **Ventana en macOS:** en vez del overlay transparente de Windows, `macFit.ts` mide los paneles visibles y pide a `main` que ajuste el tamaño de la ventana (`window:fit`). El arrastre mueve la ventana del sistema siguiendo el cursor (`window:drag`).
+- **Sesión en macOS:** `src/main/auth/browserCookies.ts` lee las cookies de YouTube del navegador por defecto (Chromium con la clave del Llavero, Firefox y Safari) y las importa a la partición `persist:ytmusic`.
 - **Skins:** el esquema `skin://<md5>/skin.wsz` descarga el skin del Skin Museum (`r2.webampskins.org`) y lo guarda en `userData/skins/`. La búsqueda usa la API GraphQL de `api.webamp.org`.
 - **Milkdrop:** viene de `webamp/butterchurn`. La pantalla completa es una ventana aparte (`visualizer.html`), porque la ventana principal es una capa transparente que cubre todos los monitores.
 - **Credenciales de TIDAL:** la app usa las que el usuario guarda en el diálogo. Para desarrollo podés copiar `.env.example` a `.env`. Lo que pongas ahí queda **dentro del build**, así que nunca compartas un instalador armado con un secret.
@@ -199,6 +245,10 @@ src/main/tidal/      api.ts (biblioteca, favoritos, búsqueda) · player.ts (con
 src/main/skins.ts    esquema skin:// y búsqueda en el Skin Museum
 src/main/visualizerWindow.ts  Milkdrop a pantalla completa
 src/main/audio/      equalizer.ts (Equalizer APO)
+src/main/platform/   AudioBackend/EqBackend: windows.ts (smtc-helper + Equalizer APO) y mac.ts (Web Audio)
+src/main/menu.ts     menú nativo de macOS (Cuenta, Ver)
+src/main/appIcon.ts  ícono de Winamp para ventanas y Dock
+src/renderer/ui/macFit.ts  ventana de macOS que se ajusta al contenido y se arrastra por los paneles
 src/main/smtc/       cliente del helper de Windows
 src/main/auth/       OAuth PKCE + client credentials + datos cifrados (safeStorage) + ajustes
 src/renderer/        Webamp + RemoteMedia + controller + Media Library + diálogos + visualizer

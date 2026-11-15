@@ -26,6 +26,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "assets/icon.png",
       "target": [
         "nsis",
         "portable"
@@ -40,13 +41,16 @@
         }
       ]
     },
+    "dmg": {
+      "icon": "assets/icon.icns"
+    },
     "mac": {
       "target": [
         "dmg",
         "zip"
       ],
       "category": "public.app-category.music",
-      "identity": null,
+      "identity": "-",
       "icon": "assets/icon.icns",
       "artifactName": "Winamp-Remote-Mac.${ext}"
     },
