@@ -6,3 +6,4 @@ native/smtc-helper/bin/
 native/smtc-helper/obj/
 .env
 *.log
+.DS_Store

@@ -5,6 +5,7 @@ import { settingsStore } from './auth/store'
 import { registerIpc } from './ipc'
 import { handleSkinScheme, registerSkinScheme } from './skins'
 import { audio } from './platform'
+import { installMacMenu } from './menu'
 
 /** macOS can't clip a transparent click-through overlay across monitors reliably: use a normal window there. */
 const isMac = process.platform === 'darwin'
@@ -133,6 +134,7 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  if (isMac) installMacMenu(window)
   const dispose = registerIpc(window)
   window.on('closed', dispose)
 

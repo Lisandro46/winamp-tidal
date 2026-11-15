@@ -92,6 +92,15 @@ export class LibraryPanel {
       this.nowPlaying.querySelector('.ml-heart')?.replaceWith(heartButton(this.nowPlayingTrackId, this.auth.connected))
     })
     document.addEventListener('library:toggle', () => root.classList.toggle('hidden'))
+    document.addEventListener('library:show-toggle', () => root.classList.toggle('hidden'))
+    // From the native menu: always reveal the library so the login status is visible.
+    document.addEventListener('auth:login', () => {
+      root.classList.remove('hidden')
+      if (!this.auth.connected) void this.connect(true)
+    })
+    document.addEventListener('auth:logout', () => {
+      if (this.auth.connected) void this.connect(false)
+    })
     document.addEventListener('auth:changed', () => void this.refreshAuth())
     this.renderNowPlaying(null)
   }
