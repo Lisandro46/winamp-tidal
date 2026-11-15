@@ -9,6 +9,7 @@ import { SearchDialog } from './ui/SearchDialog'
 import { SetupDialog } from './ui/SetupDialog'
 import { favorites } from './ui/library'
 import { enableNativeDrag, startFit } from './ui/macFit'
+import { applySkinTheme } from './ui/skinTheme'
 import { keepOnScreen, keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
@@ -126,6 +127,7 @@ async function main(): Promise<void> {
   // Centered over the primary monitor's #stage but bounded by the whole window,
   // so the Winamp windows can be dragged onto any monitor.
   await webamp.renderWhenReady($('#stage'))
+  applySkinTheme(webamp as unknown as Parameters<typeof applySkinTheme>[0])
   controller.restoreEq(settings.eq)
 
   library = new LibraryPanel($('#library'), controller)

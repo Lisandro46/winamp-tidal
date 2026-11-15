@@ -145,9 +145,10 @@ Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "meta
 - Hace falta poder elegir la cuenta o el canal asociado al correo.
 - La interfaz no muestra qué cuenta está conectada: ni el correo ni el nombre del canal. Mostrarlo en la barra de estado de la biblioteca y en el menú Cuenta.
 
-### Interfaz de la Winamp Media Library
+### Interfaz de la Winamp Media Library (hecho)
 
-- Rediseñar la ventana para que use la misma skin que Webamp (hoy usa colores y botones propios que desentonan).
+- La biblioteca y los diálogos (Buscar, Skins, Servicio) toman los colores de la skin activa de Webamp: `src/renderer/ui/skinTheme.ts` lee el store (`skinPlaylistStyle` de `pledit.txt` para listas y selección, y el promedio del sprite del borde de la playlist para el marco) y los expande en variables CSS `--skin-*` sobre `:root`, que `app.css` usa para botones biselados, barra de título, listas y scrollbars.
+- El tema se actualiza en vivo al cambiar de skin y arranca con los colores del skin base clásico. El título de la ventana pasa a ser solo "Winamp Media Library" porque el servicio ya aparece en el botón.
 
 ### Íconos
 

@@ -131,7 +131,7 @@ export class LibraryPanel {
   }
 
   private renderService(): void {
-    this.heading.textContent = `WINAMP MEDIA LIBRARY · ${this.service.toUpperCase()}`
+    this.heading.textContent = 'WINAMP MEDIA LIBRARY'
     this.serviceButton.textContent = `${this.service}…`
     this.search.placeholder = `Buscar en ${this.service}…`
   }
