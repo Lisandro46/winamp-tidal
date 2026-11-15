@@ -4,7 +4,7 @@ import type { DesktopLayout } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { registerIpc } from './ipc'
 import { handleSkinScheme, registerSkinScheme } from './skins'
-import { smtc } from './smtc/helperClient'
+import { audio } from './platform'
 
 /** Bounding box of every monitor's work area (the window spans all of them). */
 function desktopBounds(): Rectangle {
@@ -133,6 +133,6 @@ app.whenReady().then(() => {
   createWindow()
 })
 app.on('window-all-closed', () => {
-  smtc.stop()
+  audio.stop()
   app.quit()
 })

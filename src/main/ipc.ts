@@ -1,16 +1,15 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { AuthInfo, Collection, EqState, PlayContext, ProviderId, TidalCredentials, Track } from '@shared/types'
 import { settingsStore } from './auth/store'
-import { Equalizer } from './audio/equalizer'
+import { audio, eq } from './platform'
 import { createProvider } from './providers'
 import { TidalProvider } from './providers/tidal'
 import type { MusicProvider } from './providers/types'
 import { YtMusicProvider } from './providers/ytmusic'
 import { searchSkins } from './skins'
-import { smtc } from './smtc/helperClient'
 import { openVisualizer, visualizerWindow } from './visualizerWindow'
 
-/** Wires the renderer's `window.remote` API to the music service, the Windows helper and the equalizer. */
+/** Wires the renderer's `window.remote` API to the music service, the audio backend and the equalizer. */
 export function registerIpc(window: BrowserWindow): () => void {
   const send = (channel: string, payload: unknown): void => {
     if (!window.isDestroyed()) window.webContents.send(channel, payload)
@@ -22,7 +21,6 @@ export function registerIpc(window: BrowserWindow): () => void {
   }
   const onLiked = (ids: string[]): void => send('remote:liked', ids)
   let provider: MusicProvider = createProvider(settingsStore.get().provider ?? 'tidal', onLiked)
-  const equalizer = new Equalizer()
 
   const auth = (): AuthInfo => ({
     provider: provider.id,
@@ -126,11 +124,11 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('previous', () => provider.previous())
   handle('seek', (ms: number) => provider.seek(ms))
 
-  handle('setVolume', (volume: number) => smtc.setVolume(volume))
-  handle('getEq', () => equalizer.status())
+  handle('setVolume', (volume: number) => audio.setVolume(volume))
+  handle('getEq', () => eq.status())
   handle('setEq', async (state: EqState) => {
     settingsStore.update({ eq: state })
-    return equalizer.apply(state)
+    return eq.apply(state)
   })
 
   // `point` is in the main window's CSS pixels (the page is zoomed by the UI scale).
@@ -147,7 +145,7 @@ export function registerIpc(window: BrowserWindow): () => void {
   })
 
   // The visualizer only needs audio while the window can be seen.
-  const visualizer = (on: boolean): void => void smtc.setVisualizer(on).catch(() => undefined)
+  const visualizer = (on: boolean): void => void audio.setVisualizer(on).catch(() => undefined)
   window.on('minimize', () => visualizer(visualizerWindow() != null))
   window.on('restore', () => visualizer(true))
 
@@ -172,8 +170,8 @@ export function registerIpc(window: BrowserWindow): () => void {
     stopAll()
     watchState()
     stops.push(
-      smtc.onVolume((volume) => send('remote:volume', volume)),
-      smtc.onPcm((chunk) => broadcast('remote:pcm', chunk))
+      audio.onVolume((volume) => send('remote:volume', volume)),
+      audio.onPcm((chunk) => broadcast('remote:pcm', chunk))
     )
     visualizer(true)
     void provider.loadLiked().catch(() => undefined)
