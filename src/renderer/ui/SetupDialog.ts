@@ -58,12 +58,16 @@ export class SetupDialog {
     this.heading.textContent = 'ELEGIR SERVICIO'
     this.body.replaceChildren(
       el('p', {}, '¿Con qué servicio vas a escuchar música en el Winamp?'),
-      this.option(
-        'TIDAL',
-        'El Winamp maneja la app de escritorio de TIDAL (tiene que estar abierta). Opcional: buscar en TIDAL con tu propia app de desarrollador.',
-        () => void this.choose('tidal'),
-        current === 'tidal'
-      ),
+      ...(window.remote.platform === 'win32'
+        ? [
+            this.option(
+              'TIDAL',
+              'El Winamp maneja la app de escritorio de TIDAL (tiene que estar abierta). Opcional: buscar en TIDAL con tu propia app de desarrollador.',
+              () => void this.choose('tidal'),
+              current === 'tidal'
+            )
+          ]
+        : [el('div', { className: 'su-note' }, 'TIDAL: solo disponible en Windows.')]),
       this.option(
         'YouTube Music',
         'Suena desde el mismo Winamp, sin otra app. Buscá y reproducí cualquier tema; iniciando sesión con Google ves tus favoritos y playlists.',

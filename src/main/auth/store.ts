@@ -37,7 +37,7 @@ function writeEncrypted(file: string, value: unknown): void {
     writeFileSync(path, '')
     return
   }
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows no permite cifrar datos en esta cuenta')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('El sistema no permite cifrar datos en esta cuenta')
   writeFileSync(path, safeStorage.encryptString(JSON.stringify(value)))
 }
 

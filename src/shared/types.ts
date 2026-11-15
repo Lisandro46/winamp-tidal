@@ -136,6 +136,8 @@ export interface PcmChunk {
 
 /** API exposed by the preload script as `window.remote`. */
 export interface RemoteApi {
+  /** `process.platform` of the host; TIDAL (SMTC helper) only works on 'win32'. */
+  readonly platform: string
   getAuth(): Promise<AuthInfo>
   connect(): Promise<AuthInfo>
   disconnect(): Promise<AuthInfo>

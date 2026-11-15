@@ -20,7 +20,10 @@ export function registerIpc(window: BrowserWindow): () => void {
     visualizerWindow()?.webContents.send(channel, payload)
   }
   const onLiked = (ids: string[]): void => send('remote:liked', ids)
-  let provider: MusicProvider = createProvider(settingsStore.get().provider ?? 'tidal', onLiked)
+  // TIDAL is driven through the Windows-only SMTC helper; elsewhere only YouTube Music is offered.
+  const tidalSupported = process.platform === 'win32'
+  const initialProvider: ProviderId = tidalSupported ? (settingsStore.get().provider ?? 'tidal') : 'ytmusic'
+  let provider: MusicProvider = createProvider(initialProvider, onLiked)
 
   const auth = (): AuthInfo => ({
     provider: provider.id,
@@ -86,6 +89,7 @@ export function registerIpc(window: BrowserWindow): () => void {
     return auth()
   })
   handle('setProvider', async (id: ProviderId) => {
+    if (id === 'tidal' && !tidalSupported) throw new Error('TIDAL solo está disponible en Windows')
     // YouTube Music needs nothing else; TIDAL's setup continues with its catalog choice.
     settingsStore.update({ provider: id, ...(id === 'ytmusic' ? { setupDone: true } : {}) })
     if (id !== provider.id) {
