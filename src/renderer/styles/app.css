@@ -1,13 +1,34 @@
 :root {
+  /* Set live from the active Webamp skin by ui/skinTheme.ts; these are the classic Winamp defaults. */
+  --skin-panel: rgb(56, 55, 87);
+  --skin-panel-dark: rgb(0, 0, 0);
+  --skin-text: rgb(0, 255, 0);
+  --skin-accent: rgb(255, 255, 255);
+  --skin-selected: rgb(0, 0, 198);
+  --skin-on-selected: rgb(245, 245, 250);
+  --skin-on-panel: rgb(245, 245, 250);
+  --skin-button: color-mix(in srgb, var(--skin-panel) 86%, white);
+  --skin-on-button: rgb(245, 245, 250);
+  --skin-bevel-light: color-mix(in srgb, var(--skin-panel) 55%, white);
+  --skin-bevel-dark: color-mix(in srgb, var(--skin-panel) 45%, black);
+  --skin-titlebar-top: color-mix(in srgb, var(--skin-panel) 70%, white);
+  --skin-titlebar-bottom: color-mix(in srgb, var(--skin-panel) 75%, black);
+
   --bg: #000;
-  --panel: #1c1c2b;
-  --panel-dark: #10101a;
-  --bevel-light: #4a4a63;
-  --bevel-dark: #08080f;
-  --text: #00e000;
-  --text-dim: #6fa86f;
-  --accent: #e8c547;
-  --selected: #0a246a;
+  --panel: var(--skin-panel);
+  --panel-dark: var(--skin-panel-dark);
+  --bevel-light: var(--skin-bevel-light);
+  --bevel-dark: var(--skin-bevel-dark);
+  --text: var(--skin-text);
+  --text-dim: color-mix(in srgb, var(--skin-text) 72%, var(--skin-panel-dark));
+  --on-panel-dim: color-mix(in srgb, var(--skin-on-panel) 68%, var(--skin-panel));
+  --accent: var(--skin-accent);
+  --selected: var(--skin-selected);
+  --on-selected: var(--skin-on-selected);
+  --on-panel: var(--skin-on-panel);
+  --button: var(--skin-button);
+  --on-button: var(--skin-on-button);
+  --row-alt: color-mix(in srgb, var(--skin-panel-dark) 95%, var(--skin-text));
   --warn: #ff9a3c;
   --font: 'Tahoma', 'Segoe UI', sans-serif;
   --mono: 'Consolas', 'Lucida Console', monospace;
@@ -31,15 +52,19 @@ body {
 
 button {
   font: 11px var(--font);
-  color: #ddd;
-  background: linear-gradient(#3a3a52, #24243a);
+  color: var(--on-button);
+  background: linear-gradient(color-mix(in srgb, var(--button) 88%, white), var(--button) 55%, color-mix(in srgb, var(--button) 85%, black));
   border: 1px solid;
   border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   padding: 2px 8px;
   cursor: pointer;
 }
+button:hover {
+  filter: brightness(1.12);
+}
 button:active {
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  filter: brightness(0.92);
 }
 button:disabled {
   opacity: 0.5;
@@ -63,10 +88,12 @@ button:disabled {
   overflow: hidden;
   z-index: 20;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
-  border: 2px solid var(--bevel-light);
+  border: 2px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   display: flex;
   flex-direction: column;
   background: var(--panel);
+  color: var(--on-panel);
 }
 #library.hidden,
 #tidal-search.hidden,
@@ -78,12 +105,40 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
+  min-height: 20px;
   cursor: move;
-  padding: 3px 4px 3px 8px;
+  padding: 2px 4px 2px 6px;
   font: bold 9px var(--font);
   letter-spacing: 2px;
-  color: var(--accent);
-  background: linear-gradient(#2d2d55, #1a1a33);
+  text-transform: uppercase;
+  color: var(--on-panel);
+  background: linear-gradient(var(--skin-titlebar-top), var(--panel) 45%, var(--skin-titlebar-bottom));
+  border-bottom: 1px solid var(--bevel-dark);
+  white-space: nowrap;
+}
+/* Winamp-style title: lines on both sides of the text. */
+.ml-titlebar > span:first-child {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ml-titlebar > span:first-child::before,
+.ml-titlebar > span:first-child::after {
+  content: '';
+  height: 5px;
+  border-top: 1px solid var(--bevel-light);
+  border-bottom: 1px solid var(--bevel-dark);
+  opacity: 0.9;
+}
+.ml-titlebar > span:first-child::before {
+  flex: 0 0 18px;
+}
+.ml-titlebar > span:first-child::after {
+  flex: 1;
+  min-width: 8px;
 }
 .ml-status {
   display: flex;
@@ -128,16 +183,18 @@ button:disabled {
   width: 100%;
   font: 11px var(--font);
   color: var(--text);
-  background: #000;
-  border: 1px solid var(--bevel-light);
+  background: var(--panel-dark);
+  border: 1px solid;
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
   padding: 4px;
   user-select: text;
 }
 .ml-nav,
 .ml-content {
+  color: var(--text);
   flex: 1;
   overflow-y: auto;
-  background: #000;
+  background: var(--panel-dark);
   border: 1px solid;
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
 }
@@ -155,11 +212,11 @@ button:disabled {
   cursor: pointer;
 }
 .ml-nav-item:hover {
-  color: #fff;
+  color: var(--accent);
 }
 .ml-nav-item.selected {
   background: var(--selected);
-  color: #fff;
+  color: var(--on-selected);
 }
 .ml-main {
   flex: 1;
@@ -177,7 +234,7 @@ button:disabled {
 }
 .ml-list-title {
   font-weight: bold;
-  color: var(--accent);
+  color: var(--on-panel);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -197,11 +254,11 @@ button:disabled {
   cursor: default;
 }
 .ml-track:nth-child(odd) {
-  background: #050510;
+  background: var(--row-alt);
 }
 .ml-track:hover {
   background: var(--selected);
-  color: #fff;
+  color: var(--on-selected);
 }
 .ml-track span {
   white-space: nowrap;
@@ -248,12 +305,13 @@ button:disabled {
 
 /* ---- Now playing ---- */
 .ml-now {
+  color: var(--text);
   display: flex;
   gap: 10px;
   align-items: center;
   margin: 0 6px 6px;
   padding: 8px;
-  background: #000;
+  background: var(--panel-dark);
   border: 1px solid;
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
   min-height: 84px;
@@ -277,7 +335,7 @@ button:disabled {
 .ml-now-title {
   font-weight: bold;
   font-size: 13px;
-  color: #fff;
+  color: var(--accent);
 }
 .ml-now-dim,
 .ml-now-empty {
@@ -331,6 +389,7 @@ button:disabled {
 }
 .ml-collection:hover {
   background: var(--selected);
+  color: var(--on-selected);
 }
 .ml-collection img,
 .ml-cover-placeholder {
@@ -355,7 +414,7 @@ button:disabled {
   text-overflow: ellipsis;
 }
 .ml-collection-text .name {
-  color: #fff;
+  color: var(--accent);
 }
 .ml-collection-text .sub {
   color: var(--text-dim);
@@ -366,10 +425,19 @@ button:disabled {
   gap: 3px;
   letter-spacing: 0;
 }
+.ml-titlebar-actions {
+  flex-shrink: 0;
+  align-items: center;
+}
 .ml-titlebar-actions button {
-  padding: 0 6px;
-  font-size: 10px;
+  height: 16px;
+  padding: 0 7px;
+  font-size: 9px;
+  line-height: 14px;
   font-weight: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 /* ---- ▶ / + row actions ---- */
@@ -412,8 +480,10 @@ button:disabled {
   gap: 6px;
   padding-bottom: 6px;
   background: var(--panel);
-  border: 2px solid var(--bevel-light);
+  border: 2px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  color: var(--on-panel);
 }
 #tidal-search > :not(.ml-titlebar),
 #skins > :not(.ml-titlebar) {
@@ -439,6 +509,7 @@ button:disabled {
 .sd-filter.active {
   color: var(--text);
   background: var(--panel-dark);
+  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
 }
 .sd-list {
   flex: 1;
@@ -452,11 +523,11 @@ button:disabled {
 .sd-home-item:hover,
 .sd-selected {
   background: var(--selected) !important;
-  color: #fff;
+  color: var(--on-selected);
 }
 .sd-hint {
   font-size: 9px;
-  color: var(--text-dim);
+  color: var(--on-panel-dim);
   text-align: center;
 }
 
@@ -470,8 +541,10 @@ button:disabled {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border: 2px solid var(--bevel-light);
+  border: 2px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  color: var(--on-panel);
 }
 .su-body {
   display: flex;
@@ -480,13 +553,14 @@ button:disabled {
   padding: 10px 12px 12px;
   font-size: 12px;
   line-height: 1.45;
-  color: var(--text);
+  color: var(--on-panel);
 }
 .su-body p {
   margin: 0;
 }
 .su-body a {
-  color: var(--accent);
+  color: inherit;
+  text-decoration: underline;
 }
 .su-option {
   display: flex;
@@ -500,7 +574,7 @@ button:disabled {
 }
 .su-option strong {
   font-size: 12px;
-  color: var(--accent);
+  color: inherit;
 }
 .su-option.current {
   background: var(--panel-dark);
@@ -518,7 +592,7 @@ button:disabled {
 }
 .su-note {
   font-size: 10px;
-  color: var(--text-dim);
+  color: var(--on-panel-dim);
 }
 .su-error {
   color: var(--warn);
@@ -548,8 +622,10 @@ button:disabled {
   gap: 6px;
   padding-bottom: 6px;
   background: var(--panel);
-  border: 2px solid var(--bevel-light);
+  border: 2px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  color: var(--on-panel);
 }
 .sk-grid {
   flex: 1;
@@ -573,7 +649,7 @@ button:disabled {
   aspect-ratio: 275 / 348;
   object-fit: contain;
   object-position: top;
-  background: #000;
+  background: var(--panel-dark);
   image-rendering: pixelated;
 }
 .sk-card span {
@@ -583,14 +659,62 @@ button:disabled {
   text-overflow: ellipsis;
 }
 .sk-card.active {
-  outline: 2px solid var(--selected);
+  outline: 2px solid var(--accent);
 }
 .sd-hint a {
-  color: var(--text-dim);
+  color: inherit;
 }
 .su-cookies {
   min-height: 70px;
   resize: vertical;
   font-family: monospace;
   font-size: 10px;
+}
+
+/* ---- macOS: the window wraps the visible panels; library and dialogs dock to the right of Winamp ---- */
+body.mac-fit #library,
+body.mac-fit #tidal-search,
+body.mac-fit #tidal-setup,
+body.mac-fit #skins {
+  left: var(--slot-left, 0) !important;
+  top: 0 !important;
+}
+body.mac-fit .ml-titlebar {
+  cursor: default;
+}
+body.mac-fit #toast {
+  left: 6px;
+  top: 6px;
+  bottom: auto;
+  max-width: calc(100vw - 12px);
+  transform: none;
+}
+body.mac-fit #toast.visible {
+  transform: none;
+}
+
+/* ---- Scrollbars in the skin's colors ---- */
+#library ::-webkit-scrollbar,
+#tidal-search ::-webkit-scrollbar,
+#tidal-setup ::-webkit-scrollbar,
+#skins ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+#library ::-webkit-scrollbar-track,
+#tidal-search ::-webkit-scrollbar-track,
+#tidal-setup ::-webkit-scrollbar-track,
+#skins ::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--panel) 55%, black);
+}
+#library ::-webkit-scrollbar-thumb,
+#tidal-search ::-webkit-scrollbar-thumb,
+#tidal-setup ::-webkit-scrollbar-thumb,
+#skins ::-webkit-scrollbar-thumb {
+  background: var(--button);
+  border: 1px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+}
+#library ::-webkit-scrollbar-corner {
+  background: color-mix(in srgb, var(--panel) 55%, black);
 }

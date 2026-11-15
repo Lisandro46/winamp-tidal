@@ -48,7 +48,32 @@ export class RemoteController {
     })
     this.interceptTransport()
     // Removing, reordering or adding entries in the Winamp playlist edits the queue.
-    webamp.store.subscribe(() => this.syncQueue())
+    webamp.store.subscribe(() => {
+      this.syncQueue()
+      this.syncPlayMode()
+    })
+    this.syncPlayMode()
+  }
+
+  private playMode = ''
+
+  /** Winamp's SHUF and REP buttons: the app's queue applies them (Webamp's own next is intercepted). */
+  private syncPlayMode(): void {
+    const { shuffle, repeat } = this.webamp.store.getState().media
+    const key = `${shuffle}|${repeat}`
+    if (key === this.playMode) return
+    this.playMode = key
+    ignore(window.remote.setPlayMode({ shuffle, repeat }))
+  }
+
+  /** Replaces the playlist with the radio (mix) of a song (the one playing when no id is given) and plays it. */
+  async startRadio(trackId?: string): Promise<void> {
+    try {
+      const tracks = await window.remote.startRadio(trackId ?? this.lastState?.trackId)
+      if (tracks.length) this.loadList(tracks, 0)
+    } catch {
+      // the error toast explains what happened
+    }
   }
 
   /** The Winamp playlist, in order, as TIDAL tracks. */

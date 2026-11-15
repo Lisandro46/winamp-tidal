@@ -18,7 +18,10 @@ const subscribe =
 
 const methods = [
   'getAuth',
+  'getAccounts',
+  'selectAccount',
   'connect',
+  'cancelLogin',
   'disconnect',
   'getCredentials',
   'setCredentials',
@@ -26,6 +29,7 @@ const methods = [
   'setProvider',
   'importYouTubeSession',
   'setSkin',
+  'setView',
   'searchSkins',
   'getLikedTracks',
   'getPlaylists',
@@ -36,8 +40,16 @@ const methods = [
   'search',
   'setLiked',
   'getLikedIds',
+  'getSaved',
+  'setSaved',
+  'getFollowing',
+  'getEditablePlaylists',
+  'addToPlaylist',
+  'createPlaylist',
   'playTrack',
   'setQueue',
+  'setPlayMode',
+  'startRadio',
   'resume',
   'pause',
   'next',
@@ -50,13 +62,16 @@ const methods = [
   'openVisualizer'
 ] as const
 
-const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onProvider: 'provider' } as const
+const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onQueueAdd: 'queueAdd', onProvider: 'provider', onLoginStatus: 'loginStatus' } as const
 
 const api = {
+  platform: process.platform,
   ...Object.fromEntries(methods.map((name) => [name, invoke(name)])),
   ...Object.fromEntries(Object.entries(events).map(([name, channel]) => [name, subscribe(channel)])),
   windowControl: (action: 'minimize' | 'close') => ipcRenderer.send('window:control', action),
   setInteractive: (interactive: boolean) => ipcRenderer.send('window:interactive', interactive),
+  dragWindow: (action: 'start' | 'end') => ipcRenderer.send('window:drag', action),
+  fitWindow: (width: number, height: number) => ipcRenderer.send('window:fit', width, height),
   scaleWindow: (direction: 'in' | 'out' | 'reset') => ipcRenderer.send('window:scale', direction),
   getLayout: () => ipcRenderer.invoke('window:layout'),
   onLayout: (callback: (layout: unknown) => void) => {

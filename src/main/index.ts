@@ -4,10 +4,16 @@ import type { DesktopLayout } from '@shared/types'
 import { settingsStore } from './auth/store'
 import { registerIpc } from './ipc'
 import { handleSkinScheme, registerSkinScheme } from './skins'
-import { smtc } from './smtc/helperClient'
+import { audio } from './platform'
+import { installMacMenu } from './menu'
+import { applyDockIcon, windowIcon } from './appIcon'
 
-/** Bounding box of every monitor's work area (the window spans all of them). */
+/** macOS can't span one window across monitors: the floating overlay covers only the primary one there. */
+const isMac = process.platform === 'darwin'
+
+/** Bounding box of every monitor's work area (the window spans all of them; on macOS, just the primary one). */
 function desktopBounds(): Rectangle {
+  if (isMac) return screen.getPrimaryDisplay().workArea
   const areas = screen.getAllDisplays().map((d) => d.workArea)
   const left = Math.min(...areas.map((a) => a.x))
   const top = Math.min(...areas.map((a) => a.y))
@@ -36,7 +42,7 @@ function layout(): DesktopLayout {
   })
   return {
     primary: toCss(screen.getPrimaryDisplay().workArea),
-    displays: screen.getAllDisplays().map((d) => toCss(d.workArea)),
+    displays: (isMac ? [screen.getPrimaryDisplay()] : screen.getAllDisplays()).map((d) => toCss(d.workArea)),
     scale
   }
 }
@@ -48,14 +54,22 @@ function nextScale(direction: 'in' | 'out' | 'reset'): number {
   return [...SCALES].reverse().find((s) => s < scale - 0.001) ?? SCALES[0]
 }
 
+/** macOS starts small and centered on the primary display; the renderer then fits it to its content. */
+function initialMacBounds(): Rectangle {
+  const { x, y, width, height } = screen.getPrimaryDisplay().workArea
+  const [w, h] = [760, 480]
+  return { x: Math.round(x + (width - w) / 2), y: Math.round(y + (height - h) / 3), width: w, height: h }
+}
+
 /**
- * The app is a transparent, frameless window covering every monitor's work area.
- * Only the Winamp windows and the Media Library are drawn; everywhere else the
- * mouse passes through to whatever is behind, so they float like real Winamp.
+ * Windows: a transparent, frameless window covering every monitor's work area. Only the
+ * Winamp windows and the Media Library are drawn; everywhere else the mouse passes through
+ * to whatever is behind, so they float like real Winamp.
+ * macOS: a transparent frameless window that wraps just the visible panels (see `window:fit`).
  */
 function createWindow(): void {
   const window = new BrowserWindow({
-    ...desktopBounds(),
+    ...(isMac ? initialMacBounds() : desktopBounds()),
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -64,6 +78,7 @@ function createWindow(): void {
     maximizable: false,
     fullscreenable: false,
     title: 'Winamp Remote',
+    ...windowIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -72,11 +87,36 @@ function createWindow(): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
-  window.setIgnoreMouseEvents(true, { forward: true })
+  if (!isMac) window.setIgnoreMouseEvents(true, { forward: true })
 
   // The renderer reports whether the pointer is over a Winamp window or the library.
   ipcMain.on('window:interactive', (_event, interactive: boolean) => {
-    if (!window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
+    if (!isMac && !window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
+  })
+
+  // macOS: moving the window by its title bars follows the pointer (so it can cross to another display).
+  let drag: ReturnType<typeof setInterval> | undefined
+  ipcMain.on('window:drag', (_event, action: 'start' | 'end') => {
+    if (drag) clearInterval(drag)
+    drag = undefined
+    if (!isMac || action !== 'start' || window.isDestroyed()) return
+    const origin = screen.getCursorScreenPoint()
+    const [x0, y0] = window.getPosition()
+    const startedAt = Date.now()
+    drag = setInterval(() => {
+      if (window.isDestroyed() || Date.now() - startedAt > 60_000) return void clearInterval(drag)
+      const cursor = screen.getCursorScreenPoint()
+      window.setPosition(x0 + cursor.x - origin.x, y0 + cursor.y - origin.y)
+    }, 8)
+  })
+
+  // macOS: the window is exactly as big as the visible panels (a real, movable window, no click-through overlay).
+  ipcMain.on('window:fit', (_event, width: number, height: number) => {
+    if (!isMac || window.isDestroyed()) return
+    const zoom = window.webContents.getZoomFactor()
+    const [w, h] = [Math.max(1, Math.ceil(width * zoom)), Math.max(1, Math.ceil(height * zoom))]
+    const [cw, ch] = window.getContentSize()
+    if (w !== cw || h !== ch) window.setContentSize(w, h)
   })
 
   ipcMain.handle('window:layout', () => layout())
@@ -84,7 +124,7 @@ function createWindow(): void {
   // Keep covering every monitor when one is added, removed, rotated or rescaled.
   const refit = (): void => {
     if (window.isDestroyed()) return
-    window.setBounds(desktopBounds())
+    if (!isMac) window.setBounds(desktopBounds())
     window.webContents.send('window:layout', layout())
   }
   screen.on('display-metrics-changed', refit)
@@ -117,6 +157,7 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  if (isMac) installMacMenu(window)
   const dispose = registerIpc(window)
   window.on('closed', dispose)
 
@@ -130,9 +171,10 @@ function createWindow(): void {
 registerSkinScheme()
 app.whenReady().then(() => {
   handleSkinScheme()
+  applyDockIcon()
   createWindow()
 })
 app.on('window-all-closed', () => {
-  smtc.stop()
+  audio.stop()
   app.quit()
 })

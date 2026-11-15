@@ -1,8 +1,11 @@
-import { PROVIDER_NAMES, type AuthInfo, type Collection, type EqStatus, type PlaybackState, type SearchResults, type Track } from '@shared/types'
+import { PROVIDER_NAMES, type AuthInfo, type Collection, type EqStatus, type PlaybackState, type SearchResults, type Track, type YtAccounts } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
+import { AccountChooser, accountAvatar } from './AccountDialog'
 import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
-import { collectionRow, el, heartButton, refreshHearts, trackRow } from './rows'
+import { openPlaylistPicker } from './PlaylistPicker'
+import { collectionRow, el, heartButton, refreshHearts, refreshSaved, trackRow, type RowActions } from './rows'
+import { saved } from './saved'
 
 type View =
   | { kind: 'liked' }
@@ -24,6 +27,8 @@ export class LibraryPanel {
     catalog: false
   }
   private eq: EqStatus = { installed: false }
+  /** YouTube Music: the connected account and how many the login has. */
+  private accounts: YtAccounts = { accounts: [] }
   private history: View[] = []
   private loadToken = 0
   private nowPlayingTrackId: string | undefined
@@ -44,7 +49,7 @@ export class LibraryPanel {
   private nowPlaying = el('div', { className: 'ml-now' })
 
   constructor(
-    root: HTMLElement,
+    private readonly root: HTMLElement,
     private readonly controller: RemoteController
   ) {
     const titlebar = el(
@@ -71,6 +76,7 @@ export class LibraryPanel {
       )
     )
     root.append(titlebar, this.status, this.body, this.nowPlaying)
+    new AccountChooser(root)
     makeFloating(root, titlebar, LIBRARY_POSITION_KEY)
     this.body.append(
       el('div', { className: 'ml-side' }, this.search, this.nav),
@@ -87,11 +93,21 @@ export class LibraryPanel {
       if (event.key === 'Enter' && query) void this.open({ kind: 'search', query })
     })
     window.remote.onState((state) => this.renderNowPlaying(state))
+    saved.listeners.add(() => refreshSaved(this.content))
     favorites.listeners.add(() => {
       refreshHearts(this.content, this.auth.connected)
       this.nowPlaying.querySelector('.ml-heart')?.replaceWith(heartButton(this.nowPlayingTrackId, this.auth.connected))
     })
     document.addEventListener('library:toggle', () => root.classList.toggle('hidden'))
+    document.addEventListener('library:show-toggle', () => root.classList.toggle('hidden'))
+    // From the native menu: always reveal the library so the login status is visible.
+    document.addEventListener('auth:login', () => {
+      root.classList.remove('hidden')
+      if (!this.auth.connected) void this.connect(true)
+    })
+    document.addEventListener('auth:logout', () => {
+      if (this.auth.connected) void this.connect(false)
+    })
     document.addEventListener('auth:changed', () => void this.refreshAuth())
     this.renderNowPlaying(null)
   }
@@ -108,8 +124,21 @@ export class LibraryPanel {
     favorites.set(liked)
     this.renderStatus()
     this.renderNav()
+    void this.refreshAccount()
     if (auth.connected) await this.open({ kind: 'liked' }, true)
     else this.renderWelcome()
+  }
+
+  /** Shows which YouTube account is connected (also keeps the native menu in sync). */
+  private async refreshAccount(): Promise<void> {
+    if (this.auth.provider !== 'ytmusic') return
+    try {
+      // Also when disconnected: the main process then clears the account shown in the native menu.
+      this.accounts = await window.remote.getAccounts()
+    } catch {
+      this.accounts = { accounts: [] }
+    }
+    this.renderStatus()
   }
 
   setEqStatus(eq: EqStatus): void {
@@ -122,7 +151,7 @@ export class LibraryPanel {
   }
 
   private renderService(): void {
-    this.heading.textContent = `WINAMP MEDIA LIBRARY · ${this.service.toUpperCase()}`
+    this.heading.textContent = 'WINAMP MEDIA LIBRARY'
     this.serviceButton.textContent = `${this.service}…`
     this.search.placeholder = `Buscar en ${this.service}…`
   }
@@ -140,8 +169,19 @@ export class LibraryPanel {
         })
       )
     } else if (this.auth.connected) {
+      const account = this.accounts.current
       tidal.push(
-        el('span', { className: 'ml-ok' }, `● ${this.service} conectado`),
+        account
+          ? el(
+              'span',
+              { className: 'ml-ok ml-account', title: [account.name, account.handle, account.email].filter(Boolean).join(' · ') },
+              accountAvatar(account),
+              el('span', { className: 'ml-account-name' }, account.handle ?? account.name)
+            )
+          : el('span', { className: 'ml-ok' }, `● ${this.service} conectado`),
+        ...(this.accounts.accounts.length > 1
+          ? [el('button', { textContent: 'Cambiar cuenta', title: 'Elegir otra cuenta de YouTube', onclick: () => document.dispatchEvent(new CustomEvent('account:choose')) })]
+          : []),
         el('button', { textContent: 'Desconectar', onclick: () => void this.connect(false) })
       )
     } else {
@@ -156,7 +196,9 @@ export class LibraryPanel {
       ? [el('span', { className: 'ml-warn', title: this.eq.error }, '⚠ EQ sin permisos')]
       : this.eq.installed
         ? [el('span', { className: 'ml-ok', title: this.eq.configDir ?? '' }, '● EQ activo')]
-        : [el('a', { href: EQ_APO_URL, target: '_blank', textContent: 'Instalar Equalizer APO' })]
+        : window.remote.platform === 'win32'
+          ? [el('a', { href: EQ_APO_URL, target: '_blank', textContent: 'Instalar Equalizer APO' })]
+          : []
 
     this.status.replaceChildren(
       el('div', { className: 'ml-status-group' }, ...tidal),
@@ -174,21 +216,33 @@ export class LibraryPanel {
   }
 
   private async connect(connect: boolean): Promise<void> {
+    const inBrowser = this.auth.provider === 'ytmusic' && window.remote.platform === 'darwin'
     const opening =
       this.auth.provider === 'ytmusic'
-        ? 'Iniciá sesión con tu cuenta de Google en la ventana que se abrió…'
+        ? inBrowser
+          ? 'Buscando tu sesión de YouTube Music en tu navegador…'
+          : 'Iniciá sesión con tu cuenta de Google en la ventana que se abrió…'
         : 'Abriendo el login de TIDAL en el navegador…'
-    this.status.replaceChildren(connect ? opening : 'Desconectando…')
+    const showStatus = (text: string): void => {
+      const cancel = el('button', { textContent: 'Cancelar', onclick: () => void window.remote.cancelLogin() })
+      this.status.replaceChildren(text, ...(inBrowser ? [cancel] : []))
+    }
+    showStatus(connect ? opening : 'Desconectando…')
+    // macOS: the main process reports what it is waiting for while the browser sign-in runs.
+    const offStatus = connect && inBrowser ? window.remote.onLoginStatus(showStatus) : undefined
     try {
       await (connect ? window.remote.connect() : window.remote.disconnect())
     } catch {
       // the error toast explains what happened
+    } finally {
+      offStatus?.()
     }
     await this.refreshAuth()
   }
 
   private async refreshAuth(): Promise<void> {
     this.auth = await window.remote.getAuth()
+    void this.refreshAccount()
     library.invalidate()
     this.renderService()
     this.history = []
@@ -283,6 +337,19 @@ export class LibraryPanel {
 
   // ---- Rendering -----------------------------------------------------------------
 
+  /** YouTube Music with a signed-in user: can save things and add songs to playlists. */
+  private get canEdit(): boolean {
+    return this.auth.provider === 'ytmusic' && this.auth.connected
+  }
+
+  private trackActions(track: Track, play: () => void): RowActions {
+    return {
+      play,
+      add: () => this.controller.enqueue([track]),
+      ...(this.canEdit ? { playlist: () => openPlaylistPicker(this.root, track.title, async () => [track]) } : {})
+    }
+  }
+
   private showTracks(tracks: Track[]): void {
     if (tracks.length) {
       this.actions.replaceChildren(
@@ -297,42 +364,39 @@ export class LibraryPanel {
     this.content.replaceChildren(
       ...(tracks.length
         ? tracks.map((track, index) =>
-            trackRow(
-              track,
-              index,
-              { play: () => this.controller.loadList(tracks, index), add: () => this.controller.enqueue([track]) },
-              this.auth.connected
-            )
+            trackRow(track, index, this.trackActions(track, () => this.controller.loadList(tracks, index)), this.auth.connected)
           )
         : [el('div', { className: 'ml-empty' }, 'Vacío')])
     )
   }
 
-  private collectionRows(collections: Collection[]): HTMLElement[] {
+  /** `hearts` is off for the library's own artist list (who is followed isn't known there). */
+  private collectionRows(collections: Collection[], hearts = true): HTMLElement[] {
     return collections.map((collection) =>
-      collectionRow(collection, () => void this.open({ kind: 'collection', collection }), {
-        play: () => void library.tracks(collection).then((t) => this.controller.loadList(t, 0)).catch(() => undefined),
-        add: () => void library.tracks(collection).then((t) => this.controller.enqueue(t)).catch(() => undefined)
-      })
+      collectionRow(
+        collection,
+        () => void this.open({ kind: 'collection', collection }),
+        {
+          play: () => void library.tracks(collection).then((t) => this.controller.loadList(t, 0)).catch(() => undefined),
+          add: () => void library.tracks(collection).then((t) => this.controller.enqueue(t)).catch(() => undefined),
+          ...(this.canEdit ? { playlist: () => openPlaylistPicker(this.root, collection.name, () => library.tracks(collection)) } : {})
+        },
+        { save: hearts && this.auth.provider === 'ytmusic', enabled: this.auth.connected }
+      )
     )
   }
 
   private showCollections(collections: Collection[]): void {
     this.content.replaceChildren(
       ...(collections.length
-        ? this.collectionRows(collections)
+        ? this.collectionRows(collections, !(this.view?.kind === 'section' && this.view.section === 'artists'))
         : [el('div', { className: 'ml-empty' }, 'Nada por acá todavía')])
     )
   }
 
   private showSearch(results: SearchResults): void {
     const trackRows = results.tracks.map((track, index) =>
-      trackRow(
-        track,
-        index,
-        { play: () => this.controller.enqueue([track], true), add: () => this.controller.enqueue([track]) },
-        this.auth.connected
-      )
+      trackRow(track, index, this.trackActions(track, () => this.controller.enqueue([track], true)), this.auth.connected)
     )
     const groups: [string, HTMLElement[]][] = [
       ['TEMAS', trackRows],
@@ -344,6 +408,7 @@ export class LibraryPanel {
       .filter(([, rows]) => rows.length)
       .flatMap(([label, rows]) => [el('div', { className: 'ml-group' }, label), ...rows])
     this.content.replaceChildren(...(nodes.length ? nodes : [el('div', { className: 'ml-empty' }, 'Sin resultados')]))
+    if (this.canEdit) void saved.resolveArtists(results.artists)
   }
 
   private renderNowPlaying(state: PlaybackState | null): void {

@@ -7,7 +7,11 @@ import { LibraryPanel } from './ui/LibraryPanel'
 import { SkinDialog, type SkinActions } from './ui/SkinDialog'
 import { SearchDialog } from './ui/SearchDialog'
 import { SetupDialog } from './ui/SetupDialog'
+import { watchSaved } from './ui/saved'
 import { favorites } from './ui/library'
+import { enableNativeDrag, startFit } from './ui/macFit'
+import { centeredOrigin, persistView, windowLayoutFor } from './ui/viewLayout'
+import { applySkinTheme } from './ui/skinTheme'
 import { keepOnScreen, keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
@@ -15,6 +19,7 @@ const $ = <T extends HTMLElement>(selector: string): T => document.querySelector
 function showToast(message: string): void {
   const toast = $('#toast')
   toast.textContent = message
+  toast.classList.remove('ok')
   toast.classList.add('visible')
   clearTimeout(Number(toast.dataset.timer))
   toast.dataset.timer = String(setTimeout(() => toast.classList.remove('visible'), 6000))
@@ -76,9 +81,17 @@ async function main(): Promise<void> {
     document.body.textContent = 'Webamp no es compatible con este entorno.'
     return
   }
+  // macOS: a normal window that wraps the visible panels (no full-screen transparent overlay).
+  const fit = window.remote.platform === 'darwin'
+  if (fit) document.body.classList.add('mac-fit')
   const settings = await window.remote.getSettings()
+  // Windows: the stack is centered on the primary monitor of the full-desktop stage; macOS: the window wraps it.
+  const layout = await window.remote.getLayout()
+  const origin = fit ? { left: 0, top: 0 } : centeredOrigin(layout.primary.width, layout.primary.height)
+  if (settings.view?.library === false) $('#library').classList.add('hidden')
 
   const webamp = new Webamp({
+    windowLayout: windowLayoutFor(settings.view, origin),
     ...(settings.skinUrl ? { initialSkin: { url: settings.skinUrl } } : {}),
     enableHotkeys: true,
     zIndex: 10,
@@ -102,10 +115,17 @@ async function main(): Promise<void> {
   window.remote.onVolume((volume) => controller.applyVolume(volume))
   window.remote.onPcm((chunk) => getRemoteMedia()?.feedPcm(chunk))
   window.remote.onError((message) => showToast(message))
+  // The app continued with a radio on its own: show those songs in the Winamp playlist too.
+  window.remote.onQueueAdd(({ tracks, message }) => {
+    if (tracks.length) controller.enqueue(tracks)
+    showToast(message)
+  })
+  document.addEventListener('radio:start', (event) => {
+    void controller.startRadio((event as CustomEvent<{ trackId?: string } | null>).detail?.trackId)
+  })
 
-  trackPointer()
+  if (!fit) trackPointer()
   // The window spans every monitor; start the UI on the primary one.
-  const layout = await window.remote.getLayout()
   placeOnPrimary($('#stage'), $('#library'), layout)
   const recheckWebamp = keepWebampOnScreen(webamp as unknown as Parameters<typeof keepWebampOnScreen>[0])
   let scale = layout.scale
@@ -122,7 +142,9 @@ async function main(): Promise<void> {
   // Centered over the primary monitor's #stage but bounded by the whole window,
   // so the Winamp windows can be dragged onto any monitor.
   await webamp.renderWhenReady($('#stage'))
+  applySkinTheme(webamp as unknown as Parameters<typeof applySkinTheme>[0])
   controller.restoreEq(settings.eq)
+  persistView(webamp.store as unknown as Parameters<typeof persistView>[0], $('#library'))
 
   library = new LibraryPanel($('#library'), controller)
   new SkinDialog($('#skins'), skinActions(webamp), settings.skinUrl)
@@ -135,6 +157,11 @@ async function main(): Promise<void> {
     document.dispatchEvent(new CustomEvent('auth:changed'))
   })
   await library.init()
+  watchSaved()
+  if (fit) {
+    enableNativeDrag()
+    startFit()
+  }
   await window.remote.ready()
   // First run of an installer (no TIDAL app baked in): ask how it will be used.
   if (!settings.setupDone && !(await window.remote.getAuth()).configured) void setup.open()

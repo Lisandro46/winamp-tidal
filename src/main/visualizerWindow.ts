@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Point } from 'electron'
+import { windowIcon } from './appIcon'
 
 let visualizer: BrowserWindow | undefined
 
@@ -24,6 +25,7 @@ export function openVisualizer(point: Point, preset?: string): void {
     return
   }
   visualizer = new BrowserWindow({
+    ...windowIcon,
     ...display.bounds,
     frame: false,
     fullscreen: true,

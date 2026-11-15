@@ -7,12 +7,13 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "npm run build:helper && electron-vite dev",
+    "dev": "node scripts/dev.mjs",
     "build": "npm run typecheck && electron-vite build",
     "build:helper": "dotnet build native/smtc-helper -c Release -o build/smtc-helper --nologo -v q",
     "publish:helper": "dotnet publish native/smtc-helper -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o build/smtc-helper --nologo -v q",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "dist": "npm run publish:helper && npm run build && electron-builder --win --publish never"
+    "dist": "npm run publish:helper && npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --arm64 --publish never -c.productName=\"Winamp Remote\""
   },
   "build": {
     "appId": "com.lisandro.winamp-remote",
@@ -24,20 +25,35 @@
       "out/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "build/smtc-helper",
-        "to": "smtc-helper",
-        "filter": [
-          "smtc-helper.exe"
-        ]
-      }
-    ],
     "win": {
+      "icon": "assets/icon.png",
       "target": [
         "nsis",
         "portable"
+      ],
+      "extraResources": [
+        {
+          "from": "build/smtc-helper",
+          "to": "smtc-helper",
+          "filter": [
+            "smtc-helper.exe"
+          ]
+        }
       ]
+    },
+    "dmg": {
+      "icon": "assets/icon.icns"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.music",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "icon": "assets/icon.icns",
+      "artifactName": "Winamp-Remote-Mac.${ext}"
     },
     "nsis": {
       "oneClick": false,

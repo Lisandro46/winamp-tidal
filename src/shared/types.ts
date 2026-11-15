@@ -90,15 +90,65 @@ export interface AuthInfo {
   hint?: string
 }
 
+/** A YouTube account (channel) of the signed-in Google login. */
+export interface YtAccount {
+  id: string
+  name: string
+  handle?: string
+  email?: string
+  photoUrl?: string
+}
+
+export interface YtAccounts {
+  current?: YtAccount
+  accounts: YtAccount[]
+}
+
+/** One of the user's own playlists, as offered by "Agregar a playlist…". */
+export interface PlaylistChoice {
+  id: string
+  name: string
+}
+
+/** The saved way the user sees the Winamp (see renderer/ui/viewLayout.ts). */
+export interface ViewLayout {
+  equalizer: boolean
+  playlist: boolean
+  milkdrop: boolean
+  shade: { main?: boolean; equalizer?: boolean; playlist?: boolean }
+  playlistSize?: [number, number]
+  milkdropSize?: [number, number]
+  library: boolean
+}
+
 export interface AppSettings {
+  /** YouTube Music: the chosen account (channel) id; unset follows the one active on music.youtube.com. */
+  ytAccount?: string
   /** The music service the Winamp drives. */
   provider?: ProviderId
   skinUrl?: string
+  /** Which Winamp windows are open and their shape; Milkdrop starts off. */
+  view?: ViewLayout
   eq?: EqState
   /** Zoom factor for the whole UI. */
   scale?: number
   /** The first-run setup was answered (service, and for TIDAL catalog or remote-only). */
   setupDone?: boolean
+  /** YouTube Music: when the list ends, keep going with a radio of the last song (default on). */
+  autoRadio?: boolean
+}
+
+/** Winamp's SHUF and REP buttons; the app's queue (not the service) decides the order. */
+export interface PlayMode {
+  shuffle: boolean
+  /** Repeat the whole list when it ends. */
+  repeat: boolean
+}
+
+/** Tracks the app appended to the queue by itself (the radio after the list ended). */
+export interface QueueAdd {
+  tracks: Track[]
+  message: string
 }
 
 /** The user's own TIDAL developer app (developer.tidal.com). */
@@ -136,8 +186,14 @@ export interface PcmChunk {
 
 /** API exposed by the preload script as `window.remote`. */
 export interface RemoteApi {
+  /** `process.platform` of the host; TIDAL (SMTC helper) only works on 'win32'. */
+  readonly platform: string
   getAuth(): Promise<AuthInfo>
   connect(): Promise<AuthInfo>
+  /** Aborts a browser sign-in that is still waiting (macOS). */
+  cancelLogin(): Promise<void>
+  /** Progress text while signing in through the user's browser (macOS). */
+  onLoginStatus(callback: (text: string) => void): () => void
   disconnect(): Promise<AuthInfo>
   getCredentials(): Promise<CredentialsInfo>
   /** Checks and saves the user's TIDAL app, or `null` for remote-only use. Ends the first-run setup. */
@@ -147,7 +203,12 @@ export interface RemoteApi {
   setProvider(provider: ProviderId): Promise<AuthInfo>
   /** YouTube Music sign-in with the cookies of the user's own browser (passkey-only accounts). */
   importYouTubeSession(cookies: string): Promise<AuthInfo>
+  /** YouTube Music: the accounts (channels) of the signed-in login and the one in use. */
+  getAccounts(): Promise<YtAccounts>
+  /** YouTube Music: switches the account (channel) used for the library and playback. */
+  selectAccount(id: string): Promise<YtAccounts>
   setSkin(url: string | undefined): Promise<void>
+  setView(view: ViewLayout): Promise<void>
   /** Classic skins from the Winamp Skin Museum. */
   searchSkins(query: string): Promise<MuseumSkin[]>
 
@@ -160,10 +221,25 @@ export interface RemoteApi {
   search(query: string): Promise<SearchResults>
   setLiked(trackId: string, liked: boolean): Promise<void>
   getLikedIds(): Promise<string[]>
+  /** Keys ("album:<id>") of the albums and playlists saved in the user's library (artists: see getFollowing). */
+  getSaved(): Promise<string[]>
+  /** Which of these artists (ids) the user follows; checked per artist, so ask only for those on screen. */
+  getFollowing(artistIds: string[]): Promise<string[]>
+  /** Saves/removes an album or playlist, or follows/unfollows an artist. */
+  setSaved(collection: Collection, saved: boolean): Promise<void>
+  /** The user's own playlists that tracks can be added to. */
+  getEditablePlaylists(trackIds: string[]): Promise<PlaylistChoice[]>
+  /** Resolves to how many of the tracks were new to the playlist (the others were already in it). */
+  addToPlaylist(playlistId: string, trackIds: string[]): Promise<number>
+  createPlaylist(name: string, trackIds: string[]): Promise<PlaylistChoice>
 
   playTrack(context: PlayContext): Promise<void>
   /** Keeps the app's queue in sync with the Winamp playlist. */
   setQueue(tracks: Track[]): Promise<void>
+  /** Shuffle / repeat as set on the Winamp buttons. */
+  setPlayMode(mode: PlayMode): Promise<void>
+  /** YouTube Music radio (mix) of a song; the current one when no id is given. The seed comes first. */
+  startRadio(trackId?: string): Promise<Track[]>
   resume(): Promise<void>
   pause(): Promise<void>
   next(): Promise<void>
@@ -183,11 +259,17 @@ export interface RemoteApi {
   onPcm(callback: (chunk: PcmChunk) => void): () => void
   onLiked(callback: (ids: string[]) => void): () => void
   onError(callback: (message: string) => void): () => void
+  /** The app added tracks to the queue on its own (radio); append them to the Winamp playlist. */
+  onQueueAdd(callback: (added: QueueAdd) => void): () => void
   onProvider(callback: (auth: AuthInfo) => void): () => void
 
   windowControl(action: 'minimize' | 'close'): void
   /** Whether the pointer is over UI (clicks handled) or empty space (clicks pass through). */
   setInteractive(interactive: boolean): void
+  /** macOS: resize the app window to wrap the visible panels (CSS pixels). */
+  /** macOS: the page asks the main process to move the window along with the pointer. */
+  dragWindow(action: 'start' | 'end'): void
+  fitWindow(width: number, height: number): void
   scaleWindow(direction: 'in' | 'out' | 'reset'): void
   getLayout(): Promise<DesktopLayout>
   onLayout(callback: (layout: DesktopLayout) => void): () => void

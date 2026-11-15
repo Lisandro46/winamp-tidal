@@ -2,7 +2,9 @@ import { PROVIDER_NAMES, type Collection, type ProviderId, type SearchResults, t
 import type { RemoteController } from '../webamp/controller'
 import { centerOnPrimary, keepOnScreen, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
-import { collectionRow, el, refreshHearts, trackRow } from './rows'
+import { openPlaylistPicker } from './PlaylistPicker'
+import { collectionRow, el, refreshHearts, refreshSaved, trackRow, type RowActions } from './rows'
+import { saved } from './saved'
 
 type Filter = 'all' | 'tracks' | 'albums' | 'artists' | 'playlists'
 
@@ -76,8 +78,23 @@ export class SearchDialog {
     this.input.addEventListener('keydown', (event) => this.onInputKey(event))
     root.addEventListener('keydown', (event) => this.onKey(event))
     favorites.listeners.add(() => refreshHearts(this.list, this.connected))
+    saved.listeners.add(() => refreshSaved(this.list))
     document.addEventListener('search:open', () => void this.open())
     this.renderFilters()
+  }
+
+  /** YouTube Music with a signed-in user: can save things and add songs to playlists. */
+  private get canEdit(): boolean {
+    return this.provider === 'ytmusic' && this.connected
+  }
+
+  /** Actions of one song row; `play` and `add` differ between a list and a search. */
+  private trackActions(track: Track, play: () => void): RowActions {
+    return {
+      play,
+      add: () => this.controller.enqueue([track]),
+      ...(this.canEdit ? { playlist: () => openPlaylistPicker(this.root, track.title, async () => [track]) } : {})
+    }
   }
 
   // ---- Open / close --------------------------------------------------------------
@@ -246,10 +263,9 @@ export class SearchDialog {
             trackRow(
               track,
               index,
-              {
-                play: () => (asContext ? this.controller.loadList(tracks, index) : this.controller.enqueue([track], true)),
-                add: () => this.controller.enqueue([track])
-              },
+              this.trackActions(track, () =>
+                asContext ? this.controller.loadList(tracks, index) : this.controller.enqueue([track], true)
+              ),
               this.connected
             )
           )
@@ -257,22 +273,29 @@ export class SearchDialog {
     )
   }
 
-  private collectionActions(collection: Collection): { play(): void; add(): void } {
+  private collectionActions(collection: Collection): RowActions {
     return {
       play: () => void library.tracks(collection).then((tracks) => this.controller.loadList(tracks, 0)).catch(() => undefined),
-      add: () => void library.tracks(collection).then((tracks) => this.controller.enqueue(tracks)).catch(() => undefined)
+      add: () => void library.tracks(collection).then((tracks) => this.controller.enqueue(tracks)).catch(() => undefined),
+      ...(this.canEdit ? { playlist: () => openPlaylistPicker(this.root, collection.name, () => library.tracks(collection)) } : {})
     }
   }
 
-  private collectionRows(collections: Collection[]): HTMLElement[] {
+  /** `hearts` is off for the library's own artist list (who is followed isn't known there). */
+  private collectionRows(collections: Collection[], hearts = true): HTMLElement[] {
     return collections.map((collection) =>
-      collectionRow(collection, () => this.navigate({ kind: 'collection', collection }), this.collectionActions(collection))
+      collectionRow(collection, () => this.navigate({ kind: 'collection', collection }), this.collectionActions(collection), {
+        save: hearts && this.provider === 'ytmusic',
+        enabled: this.connected
+      })
     )
   }
 
   private renderCollections(collections: Collection[]): void {
     this.list.replaceChildren(
-      ...(collections.length ? this.collectionRows(collections) : [el('div', { className: 'ml-empty' }, 'Nada por acá todavía')])
+      ...(collections.length
+        ? this.collectionRows(collections, !(this.view.kind === 'section' && this.view.section === 'artists'))
+        : [el('div', { className: 'ml-empty' }, 'Nada por acá todavía')])
     )
   }
 
@@ -283,12 +306,7 @@ export class SearchDialog {
         'tracks',
         'TEMAS',
         results.tracks.map((track, index) =>
-          trackRow(
-            track,
-            index,
-            { play: () => this.controller.enqueue([track], true), add: () => this.controller.enqueue([track]) },
-            this.connected
-          )
+          trackRow(track, index, this.trackActions(track, () => this.controller.enqueue([track], true)), this.connected)
         )
       ],
       ['albums', 'ÁLBUMES (CD)', this.collectionRows(results.albums)],
@@ -299,6 +317,7 @@ export class SearchDialog {
       .filter(([filter, , rows]) => show(filter) && rows.length)
       .flatMap(([, label, rows]) => [el('div', { className: 'ml-group' }, label), ...rows])
     this.list.replaceChildren(...(nodes.length ? nodes : [el('div', { className: 'ml-empty' }, 'Sin resultados')]))
+    if (this.canEdit && show('artists')) void saved.resolveArtists(results.artists)
   }
 
   // ---- Keyboard ------------------------------------------------------------------
