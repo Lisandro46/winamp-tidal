@@ -61,7 +61,7 @@ function createWindow(): void {
   const window = new BrowserWindow({
     ...desktopBounds(),
     ...(isMac
-      ? { backgroundColor: '#0b0b14' }
+      ? { backgroundColor: '#0b0b14', minWidth: 1100, minHeight: 700 }
       : {
           frame: false,
           transparent: true,
@@ -80,7 +80,8 @@ function createWindow(): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
-  if (!isMac) window.setIgnoreMouseEvents(true, { forward: true })
+  if (isMac) window.maximize()
+  else window.setIgnoreMouseEvents(true, { forward: true })
 
   // The renderer reports whether the pointer is over a Winamp window or the library.
   ipcMain.on('window:interactive', (_event, interactive: boolean) => {
