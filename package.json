@@ -51,6 +51,7 @@
       ],
       "category": "public.app-category.music",
       "identity": "-",
+      "hardenedRuntime": false,
       "icon": "assets/icon.icns",
       "artifactName": "Winamp-Remote-Mac.${ext}"
     },
