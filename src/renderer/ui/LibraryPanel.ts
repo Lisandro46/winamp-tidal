@@ -185,15 +185,26 @@ export class LibraryPanel {
   }
 
   private async connect(connect: boolean): Promise<void> {
+    const inBrowser = this.auth.provider === 'ytmusic' && window.remote.platform === 'darwin'
     const opening =
       this.auth.provider === 'ytmusic'
-        ? 'Iniciá sesión con tu cuenta de Google en la ventana que se abrió…'
+        ? inBrowser
+          ? 'Buscando tu sesión de YouTube Music en tu navegador…'
+          : 'Iniciá sesión con tu cuenta de Google en la ventana que se abrió…'
         : 'Abriendo el login de TIDAL en el navegador…'
-    this.status.replaceChildren(connect ? opening : 'Desconectando…')
+    const showStatus = (text: string): void => {
+      const cancel = el('button', { textContent: 'Cancelar', onclick: () => void window.remote.cancelLogin() })
+      this.status.replaceChildren(text, ...(inBrowser ? [cancel] : []))
+    }
+    showStatus(connect ? opening : 'Desconectando…')
+    // macOS: the main process reports what it is waiting for while the browser sign-in runs.
+    const offStatus = connect && inBrowser ? window.remote.onLoginStatus(showStatus) : undefined
     try {
       await (connect ? window.remote.connect() : window.remote.disconnect())
     } catch {
       // the error toast explains what happened
+    } finally {
+      offStatus?.()
     }
     await this.refreshAuth()
   }

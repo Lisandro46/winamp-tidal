@@ -1,4 +1,5 @@
 import type { Collection, PlayContext, PlaybackState, SearchResults, Track } from '@shared/types'
+import { signInWithBrowser } from '../../auth/browserCookies'
 import { pageAudio } from '../../platform/pageAudio'
 import type { MusicProvider } from '../types'
 import { YtCatalog } from './catalog'
@@ -51,6 +52,8 @@ export class YtMusicProvider implements MusicProvider {
     return true
   }
   async login(): Promise<void> {
+    // macOS: sign in with the session of the user's default browser (no embedded Google page).
+    if (process.platform === 'darwin') return this.importSession(await signInWithBrowser())
     await this.window.login()
     await this.refreshCookie()
   }

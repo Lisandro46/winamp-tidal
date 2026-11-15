@@ -19,6 +19,7 @@ const subscribe =
 const methods = [
   'getAuth',
   'connect',
+  'cancelLogin',
   'disconnect',
   'getCredentials',
   'setCredentials',
@@ -50,7 +51,7 @@ const methods = [
   'openVisualizer'
 ] as const
 
-const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onProvider: 'provider' } as const
+const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onProvider: 'provider', onLoginStatus: 'loginStatus' } as const
 
 const api = {
   platform: process.platform,

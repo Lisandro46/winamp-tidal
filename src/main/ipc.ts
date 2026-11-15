@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { AuthInfo, Collection, EqState, PlayContext, ProviderId, TidalCredentials, Track } from '@shared/types'
+import { cancelBrowserLogin, onLoginProgress } from './auth/browserCookies'
 import { settingsStore } from './auth/store'
 import { audio, eq } from './platform'
 import { createProvider } from './providers'
@@ -70,6 +71,8 @@ export function registerIpc(window: BrowserWindow): () => void {
     await provider.loadLiked()
     return auth()
   })
+  handle('cancelLogin', () => cancelBrowserLogin())
+  const offLoginProgress = onLoginProgress((text) => send('remote:loginStatus', text))
   handle('disconnect', async () => {
     await provider.logout()
     await provider.loadLiked()
@@ -182,6 +185,8 @@ export function registerIpc(window: BrowserWindow): () => void {
   })
 
   return () => {
+    offLoginProgress()
+    cancelBrowserLogin()
     stopAll()
     void provider.dispose()
   }

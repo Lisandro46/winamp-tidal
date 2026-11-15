@@ -140,6 +140,10 @@ export interface RemoteApi {
   readonly platform: string
   getAuth(): Promise<AuthInfo>
   connect(): Promise<AuthInfo>
+  /** Aborts a browser sign-in that is still waiting (macOS). */
+  cancelLogin(): Promise<void>
+  /** Progress text while signing in through the user's browser (macOS). */
+  onLoginStatus(callback: (text: string) => void): () => void
   disconnect(): Promise<AuthInfo>
   getCredentials(): Promise<CredentialsInfo>
   /** Checks and saves the user's TIDAL app, or `null` for remote-only use. Ends the first-run setup. */

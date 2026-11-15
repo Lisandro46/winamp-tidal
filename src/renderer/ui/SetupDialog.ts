@@ -90,10 +90,10 @@ export class SetupDialog {
 
   private renderYouTube(connected: boolean): void {
     this.heading.textContent = 'YOUTUBE MUSIC'
-    const login = el('button', { textContent: 'Iniciar sesión con Google' })
+    const login = el('button', { textContent: window.remote.platform === 'darwin' ? 'Iniciar sesión' : 'Iniciar sesión con Google' })
     login.onclick = () => {
       login.disabled = true
-      login.textContent = 'Esperando el inicio de sesión…'
+      login.textContent = window.remote.platform === 'darwin' ? 'Esperando tu navegador…' : 'Esperando el inicio de sesión…'
       window.remote
         .connect()
         .then(() => {
@@ -103,7 +103,7 @@ export class SetupDialog {
         .catch((error) => this.showError(error))
         .finally(() => {
           login.disabled = false
-          login.textContent = 'Iniciar sesión con Google'
+          login.textContent = window.remote.platform === 'darwin' ? 'Iniciar sesión' : 'Iniciar sesión con Google'
         })
     }
     this.body.replaceChildren(
@@ -114,7 +114,13 @@ export class SetupDialog {
           ? 'Listo: YouTube Music está conectado con tu cuenta. Buscá música con "+ Agregar desde YouTube Music" o la tecla J.'
           : 'Listo: ya podés buscar y reproducir con "+ Agregar desde YouTube Music" o la tecla J. Si iniciás sesión con tu cuenta de Google vas a ver tus favoritos, playlists y mixes (y con YouTube Premium, sin anuncios).'
       ),
-      el('div', { className: 'su-note' }, 'El inicio de sesión se hace en una ventana de Google y queda guardado en esta PC.'),
+      el(
+        'div',
+        { className: 'su-note' },
+        window.remote.platform === 'darwin'
+          ? 'El inicio de sesión se hace en tu navegador (el que usás por defecto): la app toma la sesión de YouTube Music de ahí. macOS puede pedirte permiso para leer el Llavero.'
+          : 'El inicio de sesión se hace en una ventana de Google y queda guardado en esta PC.'
+      ),
       el('div', { className: 'su-error' }),
       el(
         'div',
