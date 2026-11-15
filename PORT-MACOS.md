@@ -118,3 +118,44 @@ defaults write digital.twisted.noTunes replacement "/Applications/Winamp Remote.
   funciona; si el audio se corta al conectarlo, verificar que el `AudioContext` se reanude (`resume()`) tras el play.
 - Licencia MIT: mantener el `LICENSE` original y dar crédito al autor en el README si se publica el fork.
 - Si al final funciona bien, vale la pena abrirle un PR al repo original.
+
+---
+
+## Estado actual (2026-11-15)
+
+Ya resuelto y probado en una Mac instalada:
+
+- App flotante sin ventana contenedora: la ventana mide solo lo visible, se arrastra a otras pantallas y recupera el foco bien.
+- Menú nativo (Cuenta, Ver), nombre "Winamp Remote" e ícono clásico de Winamp en el `.app`.
+- Login de YouTube Music con la sesión del navegador. Se puede desconectar y volver a conectar. macOS pide permiso del Llavero.
+
+## Pendientes
+
+### Bug prioritario: la tecla `L` cierra la biblioteca mientras se escribe
+
+Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "metallica") oculta la Winamp Media Library.
+
+- Causa probable: el listener de `keydown` en `src/renderer/webamp/controller.ts` ignora `input, textarea, #library`, pero la comprobación usa `event.target` y no cubre el caso de foco dentro de la biblioteca o de sus diálogos.
+- Esperado: `L` (y también `J`, `B`, `Z`) no deben actuar como atajos cuando el foco está en un campo de texto de cualquier panel.
+
+### Cuentas de YouTube Music
+
+- Un mismo correo puede tener varias cuentas o canales (ejemplo: dos canales bajo el mismo mail). Hoy la app toma la primera, que puede no ser la que se usa para música.
+- Hace falta poder elegir la cuenta o el canal asociado al correo.
+- La interfaz no muestra qué cuenta está conectada: ni el correo ni el nombre del canal. Mostrarlo en la barra de estado de la biblioteca y en el menú Cuenta.
+
+### Interfaz de la Winamp Media Library
+
+- Rediseñar la ventana para que use la misma skin que Webamp (hoy usa colores y botones propios que desentonan).
+
+### Íconos
+
+- Todos los íconos de la app deben ser el clásico de Winamp (ícono de la app, Dock, favicon, ventanas secundarias). No debe quedar el ícono de Electron en ningún lado.
+
+### Firma de la app
+
+- Resolver la necesidad de correr `xattr -cr` a mano tras instalar. Opciones: firmar con Developer ID y notarizar, o documentar un flujo claro de instalación.
+
+### Documentación
+
+- Actualizar el `README.md` con los cambios del port a macOS (instalación, permisos, diferencias con Windows) para poder abrir un Pull Request al repositorio original y dejar documentado lo hecho.
