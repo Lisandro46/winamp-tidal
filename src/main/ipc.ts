@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { AuthInfo, Collection, EqState, PlayContext, PlayMode, ProviderId, TidalCredentials, Track, YtAccounts } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext, PlayMode, ProviderId, TidalCredentials, Track, ViewLayout, YtAccounts } from '@shared/types'
 import { cancelBrowserLogin, onLoginProgress } from './auth/browserCookies'
 import { settingsStore } from './auth/store'
 import { setAccountLabel } from './menu'
@@ -127,6 +127,10 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('getSettings', () => settingsStore.get())
   handle('setSkin', (url: string | undefined) => {
     settingsStore.update({ skinUrl: url })
+  })
+
+  handle('setView', (view: ViewLayout) => {
+    settingsStore.update({ view })
   })
 
   handle('searchSkins', (query: string) => searchSkins(query))

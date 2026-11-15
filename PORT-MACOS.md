@@ -158,11 +158,9 @@ Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "meta
 
 - Resolver la necesidad de correr `xattr -cr` a mano tras instalar. Opciones: firmar con Developer ID y notarizar, o documentar un flujo claro de instalación.
 
-### Milkdrop apagado por defecto y vista guardada
+### Milkdrop apagado por defecto y vista guardada (hecho)
 
-- Milkdrop debe arrancar **cerrado**; solo se muestra cuando el usuario lo activa (botón Milkdrop o menú Ver).
-- Guardar y restaurar cómo el usuario ve el Winamp: qué ventanas están abiertas (principal, ecualizador, playlist, Milkdrop), el modo *shade* de cada una, el tamaño de la playlist y de Milkdrop, y si la Media Library está visible. El skin ya se guarda hoy (`skinUrl`).
-- Idea: pasar `windowLayout` a Webamp al crearlo (con `milkdrop` cerrado salvo que el usuario lo haya abierto) y suscribirse al store para guardar los cambios en `settings.json`.
+Milkdrop arranca cerrado y solo se muestra cuando el usuario lo activa. La vista se guarda en `settings.json` (`view`): ventanas abiertas (ecualizador, playlist, Milkdrop), modo *shade*, tamaño de la playlist y de Milkdrop, y si la Media Library está visible. Al iniciar, `src/renderer/ui/viewLayout.ts` pasa esa vista a Webamp como `windowLayout`; mientras se usa, se suscribe al store y guarda los cambios (con 400 ms de espera). Las posiciones no se guardan: las ventanas siempre arrancan apiladas.
 
 ### Documentación
 

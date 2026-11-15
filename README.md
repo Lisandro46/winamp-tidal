@@ -92,6 +92,7 @@ Port a macOS con **YouTube Music** completo. TIDAL no está disponible en Mac po
 - **Inicio de sesión:** **Iniciar sesión** (o *Cuenta → Iniciar sesión*) usa la sesión de **tu navegador por defecto**. Si ya tenés YouTube Music abierto con tu cuenta, entra directo. Si no, abre `music.youtube.com` en tu navegador y espera a que inicies sesión. Funciona con Chrome, Brave, Edge, Arc, Firefox y Safari. macOS te va a pedir permiso para leer el Llavero ("… Safe Storage"); para Safari hace falta además **Acceso total al disco** en *Ajustes del Sistema → Privacidad y seguridad*. Las cookies se leen solo en tu Mac y se guardan en la sesión de la app.
 - **Varias cuentas:** si tu correo tiene más de una cuenta o canal de YouTube, la app muestra cuál está conectada y *Cuenta → Cambiar de cuenta…* te deja elegir.
 - **Skins:** la Media Library y los diálogos toman los colores del skin de Winamp activo y cambian junto con él.
+- **Vista guardada:** Milkdrop arranca apagado. Qué ventanas dejás abiertas (ecualizador, playlist, Milkdrop), su tamaño y si la Media Library está visible se recuerdan al reabrir.
 
 ### Armarlo desde el código
 
@@ -191,6 +192,7 @@ macOS port with the full **YouTube Music** experience (TIDAL is Windows-only: Ma
 - **Sign-in:** uses your **default browser's** session. If you are already signed in to YouTube Music it connects immediately; otherwise it opens `music.youtube.com` in your browser and waits. Works with Chrome, Brave, Edge, Arc, Firefox and Safari. macOS asks for Keychain access ("… Safe Storage"); Safari also needs **Full Disk Access**. Cookies are read locally only.
 - **Multiple accounts:** if your email has several YouTube accounts/channels, the app shows which one is connected and *Cuenta → Cambiar de cuenta…* lets you pick.
 - **Skins:** the Media Library and dialogs take their colors from the active Winamp skin.
+- **Saved view:** Milkdrop starts off. Which windows you leave open (equalizer, playlist, Milkdrop), their size and whether the Media Library is visible are remembered across launches.
 - **Build:** `npm ci && npm run dist:mac` writes `dist/Winamp-Remote-Mac.dmg` and `.zip`. To sign with your own certificate: `npx electron-builder --mac --arm64 -c.mac.identity="Developer ID Application: …"`.
 
 ### Scope and limitations

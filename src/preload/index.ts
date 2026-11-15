@@ -29,6 +29,7 @@ const methods = [
   'setProvider',
   'importYouTubeSession',
   'setSkin',
+  'setView',
   'searchSkins',
   'getLikedTracks',
   'getPlaylists',

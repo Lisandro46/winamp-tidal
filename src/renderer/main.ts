@@ -10,6 +10,7 @@ import { SetupDialog } from './ui/SetupDialog'
 import { watchSaved } from './ui/saved'
 import { favorites } from './ui/library'
 import { enableNativeDrag, startFit } from './ui/macFit'
+import { centeredOrigin, persistView, windowLayoutFor } from './ui/viewLayout'
 import { applySkinTheme } from './ui/skinTheme'
 import { keepOnScreen, keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
@@ -84,8 +85,13 @@ async function main(): Promise<void> {
   const fit = window.remote.platform === 'darwin'
   if (fit) document.body.classList.add('mac-fit')
   const settings = await window.remote.getSettings()
+  // Windows: the stack is centered on the primary monitor of the full-desktop stage; macOS: the window wraps it.
+  const layout = await window.remote.getLayout()
+  const origin = fit ? { left: 0, top: 0 } : centeredOrigin(layout.primary.width, layout.primary.height)
+  if (settings.view?.library === false) $('#library').classList.add('hidden')
 
   const webamp = new Webamp({
+    windowLayout: windowLayoutFor(settings.view, origin),
     ...(settings.skinUrl ? { initialSkin: { url: settings.skinUrl } } : {}),
     enableHotkeys: true,
     zIndex: 10,
@@ -120,7 +126,6 @@ async function main(): Promise<void> {
 
   if (!fit) trackPointer()
   // The window spans every monitor; start the UI on the primary one.
-  const layout = await window.remote.getLayout()
   placeOnPrimary($('#stage'), $('#library'), layout)
   const recheckWebamp = keepWebampOnScreen(webamp as unknown as Parameters<typeof keepWebampOnScreen>[0])
   let scale = layout.scale
@@ -139,6 +144,7 @@ async function main(): Promise<void> {
   await webamp.renderWhenReady($('#stage'))
   applySkinTheme(webamp as unknown as Parameters<typeof applySkinTheme>[0])
   controller.restoreEq(settings.eq)
+  persistView(webamp.store as unknown as Parameters<typeof persistView>[0], $('#library'))
 
   library = new LibraryPanel($('#library'), controller)
   new SkinDialog($('#skins'), skinActions(webamp), settings.skinUrl)

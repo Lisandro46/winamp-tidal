@@ -110,12 +110,25 @@ export interface PlaylistChoice {
   name: string
 }
 
+/** The saved way the user sees the Winamp (see renderer/ui/viewLayout.ts). */
+export interface ViewLayout {
+  equalizer: boolean
+  playlist: boolean
+  milkdrop: boolean
+  shade: { main?: boolean; equalizer?: boolean; playlist?: boolean }
+  playlistSize?: [number, number]
+  milkdropSize?: [number, number]
+  library: boolean
+}
+
 export interface AppSettings {
   /** YouTube Music: the chosen account (channel) id; unset follows the one active on music.youtube.com. */
   ytAccount?: string
   /** The music service the Winamp drives. */
   provider?: ProviderId
   skinUrl?: string
+  /** Which Winamp windows are open and their shape; Milkdrop starts off. */
+  view?: ViewLayout
   eq?: EqState
   /** Zoom factor for the whole UI. */
   scale?: number
@@ -195,6 +208,7 @@ export interface RemoteApi {
   /** YouTube Music: switches the account (channel) used for the library and playback. */
   selectAccount(id: string): Promise<YtAccounts>
   setSkin(url: string | undefined): Promise<void>
+  setView(view: ViewLayout): Promise<void>
   /** Classic skins from the Winamp Skin Museum. */
   searchSkins(query: string): Promise<MuseumSkin[]>
 
