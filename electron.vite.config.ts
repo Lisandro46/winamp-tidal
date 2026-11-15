@@ -8,7 +8,13 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    resolve: { alias: { '@shared': resolve('src/shared') } }
+    resolve: { alias: { '@shared': resolve('src/shared') } },
+    build: {
+      rollupOptions: {
+        // ytmusic: the hidden YouTube Music window (macOS Web Audio backend).
+        input: { index: resolve('src/preload/index.ts'), ytmusic: resolve('src/preload/ytmusic.ts') }
+      }
+    }
   },
   renderer: {
     root: 'src/renderer',

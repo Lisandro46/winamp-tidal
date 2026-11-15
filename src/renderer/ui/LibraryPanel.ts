@@ -156,7 +156,9 @@ export class LibraryPanel {
       ? [el('span', { className: 'ml-warn', title: this.eq.error }, '⚠ EQ sin permisos')]
       : this.eq.installed
         ? [el('span', { className: 'ml-ok', title: this.eq.configDir ?? '' }, '● EQ activo')]
-        : [el('a', { href: EQ_APO_URL, target: '_blank', textContent: 'Instalar Equalizer APO' })]
+        : window.remote.platform === 'win32'
+          ? [el('a', { href: EQ_APO_URL, target: '_blank', textContent: 'Instalar Equalizer APO' })]
+          : []
 
     this.status.replaceChildren(
       el('div', { className: 'ml-status-group' }, ...tidal),

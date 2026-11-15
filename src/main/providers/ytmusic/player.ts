@@ -1,4 +1,5 @@
 import { BrowserWindow, session as sessions, type Session } from 'electron'
+import { pageAudio } from '../../platform/pageAudio'
 
 /**
  * music.youtube.com in a hidden window: it does the actual playback (with the
@@ -123,9 +124,13 @@ export class YtPlayerWindow {
         backgroundThrottling: false,
         autoplayPolicy: 'no-user-gesture-required',
         contextIsolation: true,
-        sandbox: true
+        sandbox: true,
+        // macOS: exposes only the PCM bridge of the injected Web Audio graph (none on Windows).
+        preload: pageAudio.preload()
       }
     })
+    // macOS: volume, EQ and visualizer PCM run in a Web Audio graph inside the page.
+    pageAudio.attach(window.webContents)
     // Closing the login window only hides it; the player must keep living.
     window.on('close', (event) => {
       if (this.window === window) {
@@ -149,7 +154,10 @@ export class YtPlayerWindow {
         await window.loadURL(HOME)
         const until = Date.now() + READY_TIMEOUT_MS
         while (Date.now() < until) {
-          if (await this.run<boolean>(`!!document.querySelector('#movie_player')`).catch(() => false)) return
+          if (await this.run<boolean>(`!!document.querySelector('#movie_player')`).catch(() => false)) {
+            await pageAudio.inject()
+            return
+          }
           await new Promise((r) => setTimeout(r, 300))
         }
         throw new Error('YouTube Music no cargó. Revisá la conexión a internet.')

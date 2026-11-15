@@ -32,7 +32,14 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
 }
 
 /** Slider value 0-100 (50 = flat) → dB. */
-const toDb = (value: number): number => ((value - 50) / 50) * RANGE_DB
+export const toDb = (value: number): number => ((value - 50) / 50) * RANGE_DB
+
+/** Band gains and preamp in dB for `state`, with automatic headroom (preamp lowered by the highest boost). */
+export function eqToDb(state: EqState): { preamp: number; gains: number[] } {
+  const gains = EQ_BANDS.map((_, i) => toDb(state.bands[i] ?? 50))
+  const headroom = Math.max(0, ...gains)
+  return { preamp: toDb(state.preamp) - headroom, gains }
+}
 const fmt = (db: number): string => db.toFixed(1)
 
 async function findConfigDir(): Promise<string | undefined> {
@@ -55,9 +62,7 @@ async function findConfigDir(): Promise<string | undefined> {
 export function renderConfig(state: EqState): string {
   const header = '# Managed by Winamp Remote — changes here are overwritten.\n'
   if (!state.on) return `${header}# Equalizer off\n`
-  const gains = state.bands.map(toDb)
-  const headroom = Math.max(0, ...gains)
-  const preamp = toDb(state.preamp) - headroom
+  const { preamp, gains } = eqToDb(state)
   const graphic = EQ_BANDS.map((hz, i) => `${hz} ${fmt(gains[i] ?? 0)}`).join('; ')
   return `${header}Preamp: ${fmt(preamp)} dB\nGraphicEQ: ${graphic}\n`
 }
