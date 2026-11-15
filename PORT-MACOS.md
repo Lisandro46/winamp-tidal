@@ -139,11 +139,11 @@ Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "meta
 - Arreglo previsto: quitar `accelerator` de esos ítems (dejar el atajo solo como texto en la etiqueta, por ejemplo "Mostrar/ocultar Biblioteca (L)") o usar un acelerador con modificador.
 - Esperado: `L` y `J` no deben actuar como atajos cuando el foco está en un campo de texto de cualquier panel.
 
-### Cuentas de YouTube Music
+### Cuentas de YouTube Music (hecho)
 
-- Un mismo correo puede tener varias cuentas o canales (ejemplo: dos canales bajo el mismo mail). Hoy la app toma la primera, que puede no ser la que se usa para música.
-- Hace falta poder elegir la cuenta o el canal asociado al correo.
-- La interfaz no muestra qué cuenta está conectada: ni el correo ni el nombre del canal. Mostrarlo en la barra de estado de la biblioteca y en el menú Cuenta.
+- La barra de estado de la biblioteca y el menú Cuenta muestran la cuenta conectada (avatar y @handle; el correo, si YouTube lo informa). Con más de una cuenta aparece **Cambiar cuenta** (también en Cuenta → Cambiar de cuenta…).
+- La lista sale del selector de canales de YouTube (`accounts_list`, vía youtubei.js). El catálogo actúa como el canal elegido con `on_behalf_of_user`; el reproductor oculto lo adopta visitando la redirección `/signin` de YouTube, y se verifica leyendo `DELEGATED_SESSION_ID` de la página.
+- La elección se guarda en `settings.json` (`ytAccount`). Sin elección, la app sigue la cuenta activa de music.youtube.com.
 
 ### Interfaz de la Winamp Media Library (hecho)
 

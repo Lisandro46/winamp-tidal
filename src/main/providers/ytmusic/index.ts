@@ -1,8 +1,10 @@
-import type { Collection, PlayContext, PlaybackState, SearchResults, Track } from '@shared/types'
+import type { Collection, PlayContext, PlaybackState, SearchResults, Track, YtAccount, YtAccounts } from '@shared/types'
 import { signInWithBrowser } from '../../auth/browserCookies'
+import { settingsStore } from '../../auth/store'
 import { pageAudio } from '../../platform/pageAudio'
 import type { MusicProvider } from '../types'
 import { YtCatalog } from './catalog'
+import type { RawAccount } from './accounts'
 import { YtPlayerWindow, YtState, type YtStatus } from './player'
 
 const POLL_MS = 500
@@ -25,6 +27,10 @@ export class YtMusicProvider implements MusicProvider {
   private index = -1
   private liked = new Set<string>()
   private lastStatus: YtStatus | null = null
+  private accounts: RawAccount[] = []
+  private current: RawAccount | undefined
+  /** Resolves once the active account is known and applied to the catalog (reset when the login changes). */
+  private accountReady: Promise<void> | undefined
   /** The video we asked for, until the player reports it. */
   private loading: string | undefined
   /** macOS: media keys / Now Playing next and previous go through our queue (no-op elsewhere). */
@@ -56,19 +62,88 @@ export class YtMusicProvider implements MusicProvider {
     if (process.platform === 'darwin') return this.importSession(await signInWithBrowser())
     await this.window.login()
     await this.refreshCookie()
+    this.resetAccount()
   }
   /** Signs in with cookies copied from the user's browser (see YtPlayerWindow.importCookies). */
   async importSession(text: string): Promise<void> {
     await this.window.importCookies(text)
     await this.refreshCookie()
+    this.resetAccount()
   }
   async logout(): Promise<void> {
     await this.window.logout()
     await this.refreshCookie()
+    this.resetAccount()
+  }
+
+  // ---- Accounts (channels) -------------------------------------------------------
+
+  private resetAccount(): void {
+    this.accountReady = undefined
+    this.accounts = []
+    this.current = undefined
+    this.catalog.setAccount(undefined)
+  }
+
+  /**
+   * Finds the channel to act as and applies it to the catalog. A choice made in the app wins
+   * (and is pushed to the player); otherwise it follows whatever music.youtube.com is using.
+   */
+  private syncAccount(): Promise<void> {
+    if (!this.connected) {
+      this.resetAccount()
+      return Promise.resolve()
+    }
+    if (!this.accountReady) {
+      this.accountReady = (async () => {
+        const accounts = await this.catalog.accounts()
+        this.accounts = accounts
+        if (!accounts.length) return
+        const active = await this.window.activeChannel().catch(() => undefined)
+        const playing = active === undefined ? undefined : accounts.find((a) => (a.pageId ?? '') === active)
+        const wanted = accounts.find((a) => a.id === settingsStore.get().ytAccount)
+        if (wanted?.signinUrl && playing?.id !== wanted.id) {
+          await this.window.switchChannel(wanted.signinUrl).catch(() => undefined)
+          await this.refreshCookie()
+        }
+        const chosen = wanted ?? playing ?? accounts.find((a) => a.selected) ?? accounts[0]
+        this.current = chosen
+        this.catalog.setAccount(chosen.pageId)
+      })()
+      this.accountReady.catch(() => (this.accountReady = undefined))
+    }
+    return this.accountReady
+  }
+
+  private view = ({ id, name, handle, email, photoUrl }: RawAccount): YtAccount => ({ id, name, handle, email, photoUrl })
+
+  async accountsInfo(): Promise<YtAccounts> {
+    await this.syncAccount()
+    return { current: this.current && this.view(this.current), accounts: this.accounts.map(this.view) }
+  }
+
+  async selectAccount(id: string): Promise<YtAccounts> {
+    await this.syncAccount()
+    const target = this.accounts.find((a) => a.id === id)
+    if (!target) throw new Error('Esa cuenta ya no está disponible. Volvé a iniciar sesión.')
+    if (this.current?.id !== target.id) {
+      if (!target.signinUrl) throw new Error('YouTube no permite cambiar a esa cuenta desde acá.')
+      await this.window.switchChannel(target.signinUrl)
+      if ((await this.window.activeChannel()) !== (target.pageId ?? '')) {
+        throw new Error('No se pudo cambiar de cuenta en YouTube Music. Probá cambiarla desde tu navegador.')
+      }
+      await this.refreshCookie()
+    }
+    settingsStore.update({ ytAccount: target.id })
+    this.current = target
+    this.catalog.setAccount(target.pageId)
+    await this.loadLiked()
+    return this.accountsInfo()
   }
   async ensureUser(): Promise<void> {
     await this.refreshCookie()
     if (!this.connected) throw new Error('Iniciá sesión en YouTube Music para ver tu biblioteca')
+    await this.syncAccount()
   }
   async ensureCatalog(): Promise<void> {}
 
@@ -100,6 +175,7 @@ export class YtMusicProvider implements MusicProvider {
 
   async loadLiked(): Promise<void> {
     await this.refreshCookie()
+    await this.syncAccount().catch(() => undefined)
     this.liked = new Set(this.connected ? (await this.catalog.likedTracks()).map((t) => t.id) : [])
     this.onLikedChange([...this.liked])
   }
@@ -107,6 +183,7 @@ export class YtMusicProvider implements MusicProvider {
     return [...this.liked]
   }
   async setLiked(trackId: string, liked: boolean): Promise<void> {
+    await this.syncAccount().catch(() => undefined)
     await this.catalog.setLiked(trackId, liked)
     if (liked) this.liked.add(trackId)
     else this.liked.delete(trackId)

@@ -5,7 +5,8 @@ import type {
   ProviderCapabilities,
   ProviderId,
   SearchResults,
-  Track
+  Track,
+  YtAccounts
 } from '@shared/types'
 
 /**
@@ -29,6 +30,9 @@ export interface MusicProvider {
   logout(): Promise<void>
   ensureUser(): Promise<void>
   ensureCatalog(): Promise<void>
+  /** Services with several accounts behind one login (YouTube Music). */
+  accountsInfo?(): Promise<YtAccounts>
+  selectAccount?(id: string): Promise<YtAccounts>
 
   // ---- Catalog and library -----------------------------------------------------
   search(query: string): Promise<SearchResults>

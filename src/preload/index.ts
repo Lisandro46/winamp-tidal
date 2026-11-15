@@ -18,6 +18,8 @@ const subscribe =
 
 const methods = [
   'getAuth',
+  'getAccounts',
+  'selectAccount',
   'connect',
   'cancelLogin',
   'disconnect',

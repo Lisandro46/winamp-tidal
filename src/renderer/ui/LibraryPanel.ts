@@ -1,5 +1,6 @@
-import { PROVIDER_NAMES, type AuthInfo, type Collection, type EqStatus, type PlaybackState, type SearchResults, type Track } from '@shared/types'
+import { PROVIDER_NAMES, type AuthInfo, type Collection, type EqStatus, type PlaybackState, type SearchResults, type Track, type YtAccounts } from '@shared/types'
 import type { RemoteController } from '../webamp/controller'
+import { AccountChooser, accountAvatar } from './AccountDialog'
 import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
 import { collectionRow, el, heartButton, refreshHearts, trackRow } from './rows'
@@ -24,6 +25,8 @@ export class LibraryPanel {
     catalog: false
   }
   private eq: EqStatus = { installed: false }
+  /** YouTube Music: the connected account and how many the login has. */
+  private accounts: YtAccounts = { accounts: [] }
   private history: View[] = []
   private loadToken = 0
   private nowPlayingTrackId: string | undefined
@@ -71,6 +74,7 @@ export class LibraryPanel {
       )
     )
     root.append(titlebar, this.status, this.body, this.nowPlaying)
+    new AccountChooser(root)
     makeFloating(root, titlebar, LIBRARY_POSITION_KEY)
     this.body.append(
       el('div', { className: 'ml-side' }, this.search, this.nav),
@@ -117,8 +121,21 @@ export class LibraryPanel {
     favorites.set(liked)
     this.renderStatus()
     this.renderNav()
+    void this.refreshAccount()
     if (auth.connected) await this.open({ kind: 'liked' }, true)
     else this.renderWelcome()
+  }
+
+  /** Shows which YouTube account is connected (also keeps the native menu in sync). */
+  private async refreshAccount(): Promise<void> {
+    if (this.auth.provider !== 'ytmusic') return
+    try {
+      // Also when disconnected: the main process then clears the account shown in the native menu.
+      this.accounts = await window.remote.getAccounts()
+    } catch {
+      this.accounts = { accounts: [] }
+    }
+    this.renderStatus()
   }
 
   setEqStatus(eq: EqStatus): void {
@@ -149,8 +166,19 @@ export class LibraryPanel {
         })
       )
     } else if (this.auth.connected) {
+      const account = this.accounts.current
       tidal.push(
-        el('span', { className: 'ml-ok' }, `● ${this.service} conectado`),
+        account
+          ? el(
+              'span',
+              { className: 'ml-ok ml-account', title: [account.name, account.handle, account.email].filter(Boolean).join(' · ') },
+              accountAvatar(account),
+              el('span', { className: 'ml-account-name' }, account.handle ?? account.name)
+            )
+          : el('span', { className: 'ml-ok' }, `● ${this.service} conectado`),
+        ...(this.accounts.accounts.length > 1
+          ? [el('button', { textContent: 'Cambiar cuenta', title: 'Elegir otra cuenta de YouTube', onclick: () => document.dispatchEvent(new CustomEvent('account:choose')) })]
+          : []),
         el('button', { textContent: 'Desconectar', onclick: () => void this.connect(false) })
       )
     } else {
@@ -211,6 +239,7 @@ export class LibraryPanel {
 
   private async refreshAuth(): Promise<void> {
     this.auth = await window.remote.getAuth()
+    void this.refreshAccount()
     library.invalidate()
     this.renderService()
     this.history = []

@@ -1,5 +1,6 @@
 import { Innertube } from 'youtubei.js'
 import type { Collection, CollectionKind, SearchResults, Track } from '@shared/types'
+import { parseAccounts, type AccountItemLike, type RawAccount } from './accounts'
 
 /**
  * YouTube Music's catalog and the user's library through InnerTube (the API the
@@ -88,12 +89,28 @@ const KIND_OF: Record<string, CollectionKind> = { album: 'album', playlist: 'pla
 export class YtCatalog {
   private client: Promise<Innertube> | undefined
   private cookie = ''
+  /** Brand account's page id to act as; unset for the Google account's own channel. */
+  private pageId: string | undefined
 
   /** Uses the music.youtube.com login's cookies, or none for anonymous search. */
   setCookie(cookie: string): void {
     if (cookie === this.cookie && this.client) return
     this.cookie = cookie
     this.client = undefined
+  }
+
+  /** Acts as another channel of the same login (the library, likes and mixes follow it). */
+  setAccount(pageId: string | undefined): void {
+    if (pageId === this.pageId) return
+    this.pageId = pageId
+    this.client = undefined
+  }
+
+  /** The channels behind this login. Needs a client without a page id (YouTube rejects the list otherwise). */
+  async accounts(): Promise<RawAccount[]> {
+    if (!this.loggedIn) return []
+    const yt = await Innertube.create({ lang: 'es', location: 'AR', retrieve_player: false, cookie: this.cookie })
+    return parseAccounts((await yt.account.getInfo(true)) as unknown as AccountItemLike[])
   }
 
   get loggedIn(): boolean {
@@ -106,7 +123,8 @@ export class YtCatalog {
         lang: 'es',
         location: 'AR',
         retrieve_player: false,
-        ...(this.cookie ? { cookie: this.cookie } : {})
+        ...(this.cookie ? { cookie: this.cookie } : {}),
+        ...(this.pageId ? { on_behalf_of_user: this.pageId } : {})
       })
       // Failed creations (offline) are retried on the next call.
       client.catch(() => {

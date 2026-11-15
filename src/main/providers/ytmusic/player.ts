@@ -189,6 +189,37 @@ export class YtPlayerWindow {
     return this.run<YtStatus | null>(STATUS_SCRIPT).catch(() => null)
   }
 
+  /**
+   * The channel music.youtube.com is acting as: a brand account's page id, or '' for the
+   * Google account's own channel (the page's DELEGATED_SESSION_ID).
+   */
+  async activeChannel(): Promise<string> {
+    await this.ensure()
+    return this.run<string>(
+      `(() => { try { return String(window.ytcfg.get('DELEGATED_SESSION_ID') || '') } catch { return '' } })()`
+    )
+  }
+
+  /**
+   * Makes another channel the active one by visiting YouTube's own sign-in redirect for it
+   * (what the web channel switcher does), then reloads music.youtube.com.
+   */
+  async switchChannel(signinUrl: string): Promise<void> {
+    if (!signinUrl.startsWith('/signin')) throw new Error('Cuenta no válida')
+    if (!this.window || this.window.isDestroyed()) this.window = this.create()
+    this.ready = undefined
+    const window = this.window
+    // The sign-in URL redirects (sometimes aborting the first navigation, ERR_ABORTED): that is expected.
+    await window.loadURL(`https://www.youtube.com${signinUrl}`).catch((error: Error) => {
+      if (!/ERR_ABORTED/.test(error.message)) throw error
+    })
+    for (let i = 0; i < 40 && !window.isDestroyed() && window.webContents.isLoading(); i++) {
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    await this.session.cookies.flushStore()
+    await this.ensure()
+  }
+
   /** "name=value; …" for every youtube.com cookie, to authenticate the catalog. */
   async cookie(): Promise<string> {
     const cookies = await this.session.cookies.get({ domain: 'youtube.com' })

@@ -90,7 +90,23 @@ export interface AuthInfo {
   hint?: string
 }
 
+/** A YouTube account (channel) of the signed-in Google login. */
+export interface YtAccount {
+  id: string
+  name: string
+  handle?: string
+  email?: string
+  photoUrl?: string
+}
+
+export interface YtAccounts {
+  current?: YtAccount
+  accounts: YtAccount[]
+}
+
 export interface AppSettings {
+  /** YouTube Music: the chosen account (channel) id; unset follows the one active on music.youtube.com. */
+  ytAccount?: string
   /** The music service the Winamp drives. */
   provider?: ProviderId
   skinUrl?: string
@@ -153,6 +169,10 @@ export interface RemoteApi {
   setProvider(provider: ProviderId): Promise<AuthInfo>
   /** YouTube Music sign-in with the cookies of the user's own browser (passkey-only accounts). */
   importYouTubeSession(cookies: string): Promise<AuthInfo>
+  /** YouTube Music: the accounts (channels) of the signed-in login and the one in use. */
+  getAccounts(): Promise<YtAccounts>
+  /** YouTube Music: switches the account (channel) used for the library and playback. */
+  selectAccount(id: string): Promise<YtAccounts>
   setSkin(url: string | undefined): Promise<void>
   /** Classic skins from the Winamp Skin Museum. */
   searchSkins(query: string): Promise<MuseumSkin[]>

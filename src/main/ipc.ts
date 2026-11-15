@@ -1,7 +1,8 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { AuthInfo, Collection, EqState, PlayContext, ProviderId, TidalCredentials, Track } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext, ProviderId, TidalCredentials, Track, YtAccounts } from '@shared/types'
 import { cancelBrowserLogin, onLoginProgress } from './auth/browserCookies'
 import { settingsStore } from './auth/store'
+import { setAccountLabel } from './menu'
 import { audio, eq } from './platform'
 import { createProvider } from './providers'
 import { TidalProvider } from './providers/tidal'
@@ -66,6 +67,19 @@ export function registerIpc(window: BrowserWindow): () => void {
     }
 
   handle('getAuth', auth)
+  // The connected account is mirrored in the native Cuenta menu.
+  const showAccount = (info: YtAccounts): YtAccounts => {
+    setAccountLabel(info.current ? info.current.handle ?? info.current.name : undefined)
+    return info
+  }
+  handle('getAccounts', async () => {
+    if (!provider.accountsInfo || !provider.connected) return showAccount({ accounts: [] })
+    return showAccount(await provider.accountsInfo())
+  })
+  handle('selectAccount', async (id: string) => {
+    if (!provider.selectAccount) throw new Error('Este servicio no tiene varias cuentas')
+    return showAccount(await provider.selectAccount(id))
+  })
   handle('connect', async () => {
     await provider.login()
     await provider.loadLiked()

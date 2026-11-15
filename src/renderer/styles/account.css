@@ -1,0 +1,108 @@
+/* ---- YouTube account chooser and status-bar label ---- */
+.acct-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 70px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.acct-overlay.hidden {
+  display: none;
+}
+.acct-box {
+  width: min(420px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  background: var(--panel);
+  border: 2px solid var(--bevel-light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+}
+.acct-help,
+.acct-note {
+  margin: 0 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.acct-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 8px;
+}
+.acct-list.busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--text);
+  background: var(--panel-dark);
+}
+.acct-row.current {
+  background: var(--selected);
+}
+.acct-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.acct-name {
+  color: var(--accent);
+  font-weight: bold;
+}
+.acct-sub {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct-check {
+  width: 14px;
+  color: var(--text);
+  font-weight: bold;
+}
+.acct-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.acct-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  background: var(--accent);
+  font-weight: bold;
+}
+/* Status bar: the connected account */
+.ml-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text);
+}
+.ml-account .acct-avatar {
+  width: 16px;
+  height: 16px;
+}
+.ml-account-name {
+  overflow: hidden;
+  max-width: 170px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
