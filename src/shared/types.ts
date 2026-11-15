@@ -194,6 +194,10 @@ export interface RemoteApi {
   windowControl(action: 'minimize' | 'close'): void
   /** Whether the pointer is over UI (clicks handled) or empty space (clicks pass through). */
   setInteractive(interactive: boolean): void
+  /** macOS: resize the app window to wrap the visible panels (CSS pixels). */
+  /** macOS: the page asks the main process to move the window along with the pointer. */
+  dragWindow(action: 'start' | 'end'): void
+  fitWindow(width: number, height: number): void
   scaleWindow(direction: 'in' | 'out' | 'reset'): void
   getLayout(): Promise<DesktopLayout>
   onLayout(callback: (layout: DesktopLayout) => void): () => void

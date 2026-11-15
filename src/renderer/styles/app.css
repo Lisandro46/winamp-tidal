@@ -594,3 +594,25 @@ button:disabled {
   font-family: monospace;
   font-size: 10px;
 }
+
+/* ---- macOS: the window wraps the visible panels; library and dialogs dock to the right of Winamp ---- */
+body.mac-fit #library,
+body.mac-fit #tidal-search,
+body.mac-fit #tidal-setup,
+body.mac-fit #skins {
+  left: var(--slot-left, 0) !important;
+  top: 0 !important;
+}
+body.mac-fit .ml-titlebar {
+  cursor: default;
+}
+body.mac-fit #toast {
+  left: 6px;
+  top: 6px;
+  bottom: auto;
+  max-width: calc(100vw - 12px);
+  transform: none;
+}
+body.mac-fit #toast.visible {
+  transform: none;
+}

@@ -4,6 +4,7 @@
  */
 
 import type { DesktopLayout, Rect } from '@shared/types'
+import { isFit } from './macFit'
 
 /** UI that should receive the mouse; everything else is click-through. */
 const INTERACTIVE = '#webamp, #library:not(.hidden), #tidal-search:not(.hidden), #tidal-setup:not(.hidden), #skins:not(.hidden), [id^="webamp-"]'
@@ -47,6 +48,7 @@ let primary: Rect = { x: 0, y: 0, width: window.innerWidth, height: window.inner
  * The library defaults to that monitor's right side until the user moves it.
  */
 export function placeOnPrimary(stage: HTMLElement, library: HTMLElement, layout: DesktopLayout): void {
+  if (isFit()) return
   displays = layout.displays
   primary = layout.primary
   const { x, y, width, height } = primary
@@ -72,6 +74,7 @@ const contains = (d: Rect, x: number, y: number): boolean =>
  * Keep the panel's title bar on a real monitor so it can always be grabbed.
  */
 export function keepOnScreen(panel: HTMLElement): void {
+  if (isFit()) return
   const rect = panel.getBoundingClientRect()
   // Hidden panels have no box yet; they are checked again when shown.
   if (!rect.width) return
@@ -89,6 +92,7 @@ export function keepOnScreen(panel: HTMLElement): void {
 
 /** Centers `panel` on the primary monitor (for panels that have never been moved). */
 export function centerOnPrimary(panel: HTMLElement): void {
+  if (isFit()) return
   const rect = panel.getBoundingClientRect()
   panel.style.left = `${primary.x + (primary.width - rect.width) / 2}px`
   panel.style.top = `${primary.y + (primary.height - rect.height) / 3}px`
@@ -99,6 +103,8 @@ export function centerOnPrimary(panel: HTMLElement): void {
  * Returns whether a saved position was restored.
  */
 export function makeFloating(panel: HTMLElement, handle: HTMLElement, storageKey: string): boolean {
+  // macOS: panels are docked inside the window and the whole window is what moves.
+  if (isFit()) return false
   let restored = false
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Position | null
@@ -165,6 +171,7 @@ interface WebampWindows {
  * whose title bar landed outside every monitor is pulled back onto the nearest one.
  */
 export function keepWebampOnScreen(webamp: WebampWindows): () => void {
+  if (isFit()) return () => undefined
   const check = (): void => {
     const windows = webamp.store.getState().windows.genWindows
     const positions: Record<string, { x: number; y: number }> = {}
@@ -190,6 +197,7 @@ export function keepWebampOnScreen(webamp: WebampWindows): () => void {
 
 /** Monitors were added, removed or rearranged while running. */
 export function updateLayout(stage: HTMLElement, library: HTMLElement, layout: DesktopLayout): void {
+  if (isFit()) return
   displays = layout.displays
   primary = layout.primary
   const { x, y, width, height } = primary

@@ -8,6 +8,7 @@ import { SkinDialog, type SkinActions } from './ui/SkinDialog'
 import { SearchDialog } from './ui/SearchDialog'
 import { SetupDialog } from './ui/SetupDialog'
 import { favorites } from './ui/library'
+import { enableNativeDrag, startFit } from './ui/macFit'
 import { keepOnScreen, keepWebampOnScreen, placeOnPrimary, trackPointer, updateLayout } from './ui/desktop'
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!
@@ -76,6 +77,9 @@ async function main(): Promise<void> {
     document.body.textContent = 'Webamp no es compatible con este entorno.'
     return
   }
+  // macOS: a normal window that wraps the visible panels (no full-screen transparent overlay).
+  const fit = window.remote.platform === 'darwin'
+  if (fit) document.body.classList.add('mac-fit')
   const settings = await window.remote.getSettings()
 
   const webamp = new Webamp({
@@ -103,7 +107,7 @@ async function main(): Promise<void> {
   window.remote.onPcm((chunk) => getRemoteMedia()?.feedPcm(chunk))
   window.remote.onError((message) => showToast(message))
 
-  trackPointer()
+  if (!fit) trackPointer()
   // The window spans every monitor; start the UI on the primary one.
   const layout = await window.remote.getLayout()
   placeOnPrimary($('#stage'), $('#library'), layout)
@@ -135,6 +139,10 @@ async function main(): Promise<void> {
     document.dispatchEvent(new CustomEvent('auth:changed'))
   })
   await library.init()
+  if (fit) {
+    enableNativeDrag()
+    startFit()
+  }
   await window.remote.ready()
   // First run of an installer (no TIDAL app baked in): ask how it will be used.
   if (!settings.setupDone && !(await window.remote.getAuth()).configured) void setup.open()
