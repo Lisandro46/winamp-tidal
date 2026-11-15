@@ -6,8 +6,12 @@ import { registerIpc } from './ipc'
 import { handleSkinScheme, registerSkinScheme } from './skins'
 import { audio } from './platform'
 
-/** Bounding box of every monitor's work area (the window spans all of them). */
+/** macOS can't clip a transparent click-through overlay across monitors reliably: use a normal window there. */
+const isMac = process.platform === 'darwin'
+
+/** Bounding box of every monitor's work area (the window spans all of them; on macOS, just the primary one). */
 function desktopBounds(): Rectangle {
+  if (isMac) return screen.getPrimaryDisplay().workArea
   const areas = screen.getAllDisplays().map((d) => d.workArea)
   const left = Math.min(...areas.map((a) => a.x))
   const top = Math.min(...areas.map((a) => a.y))
@@ -56,13 +60,17 @@ function nextScale(direction: 'in' | 'out' | 'reset'): number {
 function createWindow(): void {
   const window = new BrowserWindow({
     ...desktopBounds(),
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    hasShadow: false,
-    resizable: false,
-    maximizable: false,
-    fullscreenable: false,
+    ...(isMac
+      ? { backgroundColor: '#0b0b14' }
+      : {
+          frame: false,
+          transparent: true,
+          backgroundColor: '#00000000',
+          hasShadow: false,
+          resizable: false,
+          maximizable: false,
+          fullscreenable: false
+        }),
     title: 'Winamp Remote',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -72,11 +80,11 @@ function createWindow(): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
-  window.setIgnoreMouseEvents(true, { forward: true })
+  if (!isMac) window.setIgnoreMouseEvents(true, { forward: true })
 
   // The renderer reports whether the pointer is over a Winamp window or the library.
   ipcMain.on('window:interactive', (_event, interactive: boolean) => {
-    if (!window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
+    if (!isMac && !window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
   })
 
   ipcMain.handle('window:layout', () => layout())
@@ -84,7 +92,7 @@ function createWindow(): void {
   // Keep covering every monitor when one is added, removed, rotated or rescaled.
   const refit = (): void => {
     if (window.isDestroyed()) return
-    window.setBounds(desktopBounds())
+    if (!isMac) window.setBounds(desktopBounds())
     window.webContents.send('window:layout', layout())
   }
   screen.on('display-metrics-changed', refit)
