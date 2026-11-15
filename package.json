@@ -47,6 +47,7 @@
       ],
       "category": "public.app-category.music",
       "identity": null,
+      "icon": "assets/icon.icns",
       "artifactName": "Winamp-Remote-Mac.${ext}"
     },
     "nsis": {

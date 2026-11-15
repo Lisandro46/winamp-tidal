@@ -76,13 +76,6 @@ async function main(): Promise<void> {
     document.body.textContent = 'Webamp no es compatible con este entorno.'
     return
   }
-  if (window.remote.platform === 'darwin') {
-    // Native-looking window: translucent background and a draggable strip next to the traffic lights.
-    document.body.classList.add('mac')
-    const drag = document.createElement('div')
-    drag.id = 'mac-drag'
-    document.body.append(drag)
-  }
   const settings = await window.remote.getSettings()
 
   const webamp = new Webamp({

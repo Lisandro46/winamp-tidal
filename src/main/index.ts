@@ -7,7 +7,7 @@ import { handleSkinScheme, registerSkinScheme } from './skins'
 import { audio } from './platform'
 import { installMacMenu } from './menu'
 
-/** macOS can't clip a transparent click-through overlay across monitors reliably: use a normal window there. */
+/** macOS can't span one window across monitors: the floating overlay covers only the primary one there. */
 const isMac = process.platform === 'darwin'
 
 /** Bounding box of every monitor's work area (the window spans all of them; on macOS, just the primary one). */
@@ -41,7 +41,7 @@ function layout(): DesktopLayout {
   })
   return {
     primary: toCss(screen.getPrimaryDisplay().workArea),
-    displays: screen.getAllDisplays().map((d) => toCss(d.workArea)),
+    displays: (isMac ? [screen.getPrimaryDisplay()] : screen.getAllDisplays()).map((d) => toCss(d.workArea)),
     scale
   }
 }
@@ -61,24 +61,13 @@ function nextScale(direction: 'in' | 'out' | 'reset'): number {
 function createWindow(): void {
   const window = new BrowserWindow({
     ...desktopBounds(),
-    ...(isMac
-      ? {
-          backgroundColor: '#00000000',
-          vibrancy: 'under-window',
-          visualEffectState: 'active',
-          titleBarStyle: 'hiddenInset',
-          minWidth: 1100,
-          minHeight: 700
-        }
-      : {
-          frame: false,
-          transparent: true,
-          backgroundColor: '#00000000',
-          hasShadow: false,
-          resizable: false,
-          maximizable: false,
-          fullscreenable: false
-        }),
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     title: 'Winamp Remote',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -88,12 +77,11 @@ function createWindow(): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
-  if (isMac) window.maximize()
-  else window.setIgnoreMouseEvents(true, { forward: true })
+  window.setIgnoreMouseEvents(true, { forward: true })
 
   // The renderer reports whether the pointer is over a Winamp window or the library.
   ipcMain.on('window:interactive', (_event, interactive: boolean) => {
-    if (!isMac && !window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
+    if (!window.isDestroyed()) window.setIgnoreMouseEvents(!interactive, { forward: true })
   })
 
   ipcMain.handle('window:layout', () => layout())
@@ -101,7 +89,7 @@ function createWindow(): void {
   // Keep covering every monitor when one is added, removed, rotated or rescaled.
   const refit = (): void => {
     if (window.isDestroyed()) return
-    if (!isMac) window.setBounds(desktopBounds())
+    window.setBounds(desktopBounds())
     window.webContents.send('window:layout', layout())
   }
   screen.on('display-metrics-changed', refit)
