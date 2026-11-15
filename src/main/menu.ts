@@ -9,11 +9,11 @@ export function installMacMenu(window: BrowserWindow): void {
     if (window.isDestroyed()) return
     void window.webContents.executeJavaScript(`document.dispatchEvent(new CustomEvent(${JSON.stringify(event)}))`)
   }
-  const item = (label: string, event: string, accelerator?: string): MenuItemConstructorOptions => ({
+  // No accelerators: on macOS a menu key equivalent without a modifier swallows the letter
+  // everywhere (typing an "l" in the search box would toggle the library). L and J are handled
+  // by the page, which ignores them while a text field has focus; the label only shows the hint.
+  const item = (label: string, event: string): MenuItemConstructorOptions => ({
     label,
-    accelerator,
-    // Plain letter shortcuts (L, J) are handled by the page itself; show them only as a hint.
-    registerAccelerator: false,
     click: () => fire(event)
   })
 
@@ -32,8 +32,8 @@ export function installMacMenu(window: BrowserWindow): void {
     {
       label: 'Ver',
       submenu: [
-        item('Mostrar/ocultar Biblioteca', 'library:show-toggle', 'L'),
-        item('Buscar en YouTube Music…', 'search:open', 'J'),
+        item('Mostrar/ocultar Biblioteca (L)', 'library:show-toggle'),
+        item('Buscar en YouTube Music… (J)', 'search:open'),
         item('Skins…', 'skins:open'),
         item('Milkdrop', 'milkdrop:toggle'),
         { type: 'separator' },
