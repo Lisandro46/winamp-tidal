@@ -1,5 +1,7 @@
 import type { Collection, Track } from '@shared/types'
+import { isSavable, savedKeyOf } from '@shared/saved'
 import { favorites } from './library'
+import { saved } from './saved'
 
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -47,14 +49,55 @@ export function refreshHearts(root: HTMLElement, enabled: boolean): void {
 export interface RowActions {
   play(): void
   add(): void
+  /** "Agregar a playlist…" (YouTube Music, signed in). */
+  playlist?(): void
 }
 
-const actionButtons = ({ play, add }: RowActions, what: string): HTMLElement =>
+const SAVE_TITLES: Record<Collection['kind'], [string, string]> = {
+  album: ['Guardar el álbum en tu biblioteca', 'Quitar el álbum de tu biblioteca'],
+  playlist: ['Guardar la playlist en tu biblioteca', 'Quitar la playlist de tu biblioteca'],
+  artist: ['Seguir al artista', 'Dejar de seguir al artista'],
+  mix: ['', '']
+}
+
+const paintSave = (button: HTMLElement, kind: Collection['kind'], on: boolean): void => {
+  button.classList.toggle('liked', on)
+  button.textContent = on ? '♥' : '♡'
+  button.title = SAVE_TITLES[kind][on ? 1 : 0]
+}
+
+/** Heart of an album, artist or playlist: saved in the user's library (like the heart of a song). */
+export function saveButton(collection: Collection, enabled: boolean): HTMLButtonElement {
+  const button = el('button', {
+    className: 'ml-heart ml-save',
+    disabled: !enabled,
+    onclick: stop(() => void saved.toggle(collection))
+  })
+  button.dataset.saveKey = savedKeyOf(collection)
+  button.dataset.kind = collection.kind
+  paintSave(button, collection.kind, saved.has(collection))
+  if (!enabled) button.title = 'Iniciá sesión para guardar en tu biblioteca'
+  return button
+}
+
+/** Repaints every album/artist/playlist heart inside `root` from the saved state. */
+export function refreshSaved(root: HTMLElement): void {
+  for (const button of root.querySelectorAll<HTMLElement>('.ml-save[data-save-key]')) {
+    if (!(button as HTMLButtonElement).disabled) {
+      paintSave(button, button.dataset.kind as Collection['kind'], saved.keys.has(button.dataset.saveKey ?? ''))
+    }
+  }
+}
+
+const actionButtons = ({ play, add, playlist }: RowActions, what: string): HTMLElement =>
   el(
     'span',
     { className: 'row-actions' },
     el('button', { className: 'row-play', textContent: '▶', title: `Reproducir ${what}`, onclick: stop(play) }),
-    el('button', { className: 'row-add', textContent: '+', title: `Agregar ${what} a la playlist`, onclick: stop(add) })
+    el('button', { className: 'row-add', textContent: '+', title: `Agregar ${what} a la playlist del Winamp`, onclick: stop(add) }),
+    ...(playlist
+      ? [el('button', { className: 'row-pl', textContent: '☰', title: `Agregar ${what} a una playlist de YouTube Music…`, onclick: stop(playlist) })]
+      : [])
   )
 
 export function trackRow(track: Track, index: number, actions: RowActions, likeEnabled: boolean): HTMLElement {
@@ -62,7 +105,7 @@ export function trackRow(track: Track, index: number, actions: RowActions, likeE
   heart.dataset.trackId = track.id
   const row = el(
     'div',
-    { className: 'ml-track', title: 'Doble click: reproducir', ondblclick: () => actions.play() },
+    { className: actions.playlist ? 'ml-track has-pl' : 'ml-track', title: 'Doble click: reproducir', ondblclick: () => actions.play() },
     el('span', { className: 'n' }, String(index + 1)),
     heart,
     el('span', { className: 't' }, track.title),
@@ -81,7 +124,19 @@ const KIND_LABEL: Record<Collection['kind'], string> = {
   artist: 'los temas del artista'
 }
 
-export function collectionRow(collection: Collection, open: () => void, actions?: RowActions): HTMLElement {
+export interface CollectionRowOptions {
+  /** Show the save/follow heart (YouTube Music). */
+  save?: boolean
+  /** The heart works (signed in). */
+  enabled?: boolean
+}
+
+export function collectionRow(
+  collection: Collection,
+  open: () => void,
+  actions?: RowActions,
+  options: CollectionRowOptions = {}
+): HTMLElement {
   return el(
     'div',
     { className: 'ml-collection', title: 'Click: ver temas', onclick: open },
@@ -100,6 +155,7 @@ export function collectionRow(collection: Collection, open: () => void, actions?
           .join(' · ')
       )
     ),
+    ...(options.save && isSavable(collection.kind) ? [saveButton(collection, options.enabled ?? false)] : []),
     ...(actions ? [actionButtons(actions, KIND_LABEL[collection.kind])] : [])
   )
 }

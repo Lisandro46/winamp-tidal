@@ -140,6 +140,16 @@ export function registerIpc(window: BrowserWindow): () => void {
   handle('search', catalog((query: string) => provider.search(query)))
   handle('setLiked', library((id: string, liked: boolean) => provider.setLiked(id, liked)))
   handle('getLikedIds', () => provider.likedIds())
+  // Library edits: saving albums/playlists/artists and adding tracks to the user's playlists.
+  const unsupported = (): never => {
+    throw new Error('Este servicio no permite esto')
+  }
+  handle('getSaved', library(() => (provider.savedKeys ? provider.savedKeys() : Promise.resolve([]))))
+  handle('getFollowing', library((ids: string[]) => (provider.followingArtists ? provider.followingArtists(ids) : Promise.resolve([]))))
+  handle('setSaved', library((collection: Collection, saved: boolean) => provider.setSaved ? provider.setSaved(collection, saved) : unsupported()))
+  handle('getEditablePlaylists', library((ids: string[]) => provider.editablePlaylists ? provider.editablePlaylists(ids) : unsupported()))
+  handle('addToPlaylist', library((id: string, ids: string[]) => provider.addToPlaylist ? provider.addToPlaylist(id, ids) : unsupported()))
+  handle('createPlaylist', library((name: string, ids: string[]) => provider.createPlaylist ? provider.createPlaylist(name, ids) : unsupported()))
 
   handle('playTrack', (context: PlayContext) => provider.playTrack(context))
   handle('setQueue', (tracks: Track[]) => provider.setQueue(tracks))

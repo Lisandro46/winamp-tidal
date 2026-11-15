@@ -3,6 +3,7 @@ import type {
   PlayContext,
   PlayMode,
   PlaybackState,
+  PlaylistChoice,
   ProviderCapabilities,
   ProviderId,
   QueueAdd,
@@ -49,6 +50,17 @@ export interface MusicProvider {
   loadLiked(): Promise<void>
   likedIds(): string[]
   setLiked(trackId: string, liked: boolean): Promise<void>
+
+  // ---- Library edits (optional: only some services offer them) ---------------------
+  /** Keys of the albums, artists and playlists saved in the user's library. */
+  savedKeys?(): Promise<string[]>
+  setSaved?(collection: Collection, saved: boolean): Promise<void>
+  /** Which of these artists the user follows. */
+  followingArtists?(ids: string[]): Promise<string[]>
+  editablePlaylists?(trackIds: string[]): Promise<PlaylistChoice[]>
+  /** Resolves to how many of the tracks were new to the playlist. */
+  addToPlaylist?(playlistId: string, trackIds: string[]): Promise<number>
+  createPlaylist?(name: string, trackIds: string[]): Promise<PlaylistChoice>
 
   // ---- Playback ----------------------------------------------------------------
   playTrack(context: PlayContext): Promise<void>

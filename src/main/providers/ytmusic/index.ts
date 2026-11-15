@@ -1,4 +1,4 @@
-import type { Collection, PlayContext, PlayMode, PlaybackState, QueueAdd, SearchResults, Track, YtAccount, YtAccounts } from '@shared/types'
+import type { Collection, PlayContext, PlayMode, PlaybackState, QueueAdd, PlaylistChoice, SearchResults, Track, YtAccount, YtAccounts } from '@shared/types'
 import { signInWithBrowser } from '../../auth/browserCookies'
 import { settingsStore } from '../../auth/store'
 import { pageAudio } from '../../platform/pageAudio'
@@ -190,6 +190,33 @@ export class YtMusicProvider implements MusicProvider {
     if (liked) this.liked.add(trackId)
     else this.liked.delete(trackId)
     this.onLikedChange([...this.liked])
+  }
+
+  // ---- Library edits -------------------------------------------------------------
+
+  async savedKeys(): Promise<string[]> {
+    await this.syncAccount().catch(() => undefined)
+    return this.catalog.savedKeys()
+  }
+  async followingArtists(ids: string[]): Promise<string[]> {
+    await this.syncAccount().catch(() => undefined)
+    return this.catalog.followingArtists(ids)
+  }
+  async setSaved(collection: Collection, saved: boolean): Promise<void> {
+    await this.syncAccount().catch(() => undefined)
+    await this.catalog.setSaved(collection, saved)
+  }
+  async editablePlaylists(trackIds: string[]): Promise<PlaylistChoice[]> {
+    await this.syncAccount().catch(() => undefined)
+    return this.catalog.editablePlaylists(trackIds)
+  }
+  async addToPlaylist(playlistId: string, trackIds: string[]): Promise<number> {
+    await this.syncAccount().catch(() => undefined)
+    return this.catalog.addToPlaylist(playlistId, trackIds)
+  }
+  async createPlaylist(name: string, trackIds: string[]): Promise<PlaylistChoice> {
+    await this.syncAccount().catch(() => undefined)
+    return this.catalog.createPlaylist(name, trackIds)
   }
 
   // ---- Playback ----------------------------------------------------------------

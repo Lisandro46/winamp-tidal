@@ -3,7 +3,9 @@ import type { RemoteController } from '../webamp/controller'
 import { AccountChooser, accountAvatar } from './AccountDialog'
 import { LIBRARY_POSITION_KEY, makeFloating } from './desktop'
 import { favorites, library, SECTIONS, type Section } from './library'
-import { collectionRow, el, heartButton, refreshHearts, trackRow } from './rows'
+import { openPlaylistPicker } from './PlaylistPicker'
+import { collectionRow, el, heartButton, refreshHearts, refreshSaved, trackRow, type RowActions } from './rows'
+import { saved } from './saved'
 
 type View =
   | { kind: 'liked' }
@@ -47,7 +49,7 @@ export class LibraryPanel {
   private nowPlaying = el('div', { className: 'ml-now' })
 
   constructor(
-    root: HTMLElement,
+    private readonly root: HTMLElement,
     private readonly controller: RemoteController
   ) {
     const titlebar = el(
@@ -91,6 +93,7 @@ export class LibraryPanel {
       if (event.key === 'Enter' && query) void this.open({ kind: 'search', query })
     })
     window.remote.onState((state) => this.renderNowPlaying(state))
+    saved.listeners.add(() => refreshSaved(this.content))
     favorites.listeners.add(() => {
       refreshHearts(this.content, this.auth.connected)
       this.nowPlaying.querySelector('.ml-heart')?.replaceWith(heartButton(this.nowPlayingTrackId, this.auth.connected))
@@ -334,6 +337,19 @@ export class LibraryPanel {
 
   // ---- Rendering -----------------------------------------------------------------
 
+  /** YouTube Music with a signed-in user: can save things and add songs to playlists. */
+  private get canEdit(): boolean {
+    return this.auth.provider === 'ytmusic' && this.auth.connected
+  }
+
+  private trackActions(track: Track, play: () => void): RowActions {
+    return {
+      play,
+      add: () => this.controller.enqueue([track]),
+      ...(this.canEdit ? { playlist: () => openPlaylistPicker(this.root, track.title, async () => [track]) } : {})
+    }
+  }
+
   private showTracks(tracks: Track[]): void {
     if (tracks.length) {
       this.actions.replaceChildren(
@@ -348,42 +364,39 @@ export class LibraryPanel {
     this.content.replaceChildren(
       ...(tracks.length
         ? tracks.map((track, index) =>
-            trackRow(
-              track,
-              index,
-              { play: () => this.controller.loadList(tracks, index), add: () => this.controller.enqueue([track]) },
-              this.auth.connected
-            )
+            trackRow(track, index, this.trackActions(track, () => this.controller.loadList(tracks, index)), this.auth.connected)
           )
         : [el('div', { className: 'ml-empty' }, 'Vacío')])
     )
   }
 
-  private collectionRows(collections: Collection[]): HTMLElement[] {
+  /** `hearts` is off for the library's own artist list (who is followed isn't known there). */
+  private collectionRows(collections: Collection[], hearts = true): HTMLElement[] {
     return collections.map((collection) =>
-      collectionRow(collection, () => void this.open({ kind: 'collection', collection }), {
-        play: () => void library.tracks(collection).then((t) => this.controller.loadList(t, 0)).catch(() => undefined),
-        add: () => void library.tracks(collection).then((t) => this.controller.enqueue(t)).catch(() => undefined)
-      })
+      collectionRow(
+        collection,
+        () => void this.open({ kind: 'collection', collection }),
+        {
+          play: () => void library.tracks(collection).then((t) => this.controller.loadList(t, 0)).catch(() => undefined),
+          add: () => void library.tracks(collection).then((t) => this.controller.enqueue(t)).catch(() => undefined),
+          ...(this.canEdit ? { playlist: () => openPlaylistPicker(this.root, collection.name, () => library.tracks(collection)) } : {})
+        },
+        { save: hearts && this.auth.provider === 'ytmusic', enabled: this.auth.connected }
+      )
     )
   }
 
   private showCollections(collections: Collection[]): void {
     this.content.replaceChildren(
       ...(collections.length
-        ? this.collectionRows(collections)
+        ? this.collectionRows(collections, !(this.view?.kind === 'section' && this.view.section === 'artists'))
         : [el('div', { className: 'ml-empty' }, 'Nada por acá todavía')])
     )
   }
 
   private showSearch(results: SearchResults): void {
     const trackRows = results.tracks.map((track, index) =>
-      trackRow(
-        track,
-        index,
-        { play: () => this.controller.enqueue([track], true), add: () => this.controller.enqueue([track]) },
-        this.auth.connected
-      )
+      trackRow(track, index, this.trackActions(track, () => this.controller.enqueue([track], true)), this.auth.connected)
     )
     const groups: [string, HTMLElement[]][] = [
       ['TEMAS', trackRows],
@@ -395,6 +408,7 @@ export class LibraryPanel {
       .filter(([, rows]) => rows.length)
       .flatMap(([label, rows]) => [el('div', { className: 'ml-group' }, label), ...rows])
     this.content.replaceChildren(...(nodes.length ? nodes : [el('div', { className: 'ml-empty' }, 'Sin resultados')]))
+    if (this.canEdit) void saved.resolveArtists(results.artists)
   }
 
   private renderNowPlaying(state: PlaybackState | null): void {

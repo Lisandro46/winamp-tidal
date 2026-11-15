@@ -7,6 +7,7 @@ import { LibraryPanel } from './ui/LibraryPanel'
 import { SkinDialog, type SkinActions } from './ui/SkinDialog'
 import { SearchDialog } from './ui/SearchDialog'
 import { SetupDialog } from './ui/SetupDialog'
+import { watchSaved } from './ui/saved'
 import { favorites } from './ui/library'
 import { enableNativeDrag, startFit } from './ui/macFit'
 import { applySkinTheme } from './ui/skinTheme'
@@ -17,6 +18,7 @@ const $ = <T extends HTMLElement>(selector: string): T => document.querySelector
 function showToast(message: string): void {
   const toast = $('#toast')
   toast.textContent = message
+  toast.classList.remove('ok')
   toast.classList.add('visible')
   clearTimeout(Number(toast.dataset.timer))
   toast.dataset.timer = String(setTimeout(() => toast.classList.remove('visible'), 6000))
@@ -149,6 +151,7 @@ async function main(): Promise<void> {
     document.dispatchEvent(new CustomEvent('auth:changed'))
   })
   await library.init()
+  watchSaved()
   if (fit) {
     enableNativeDrag()
     startFit()

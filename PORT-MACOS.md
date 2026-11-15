@@ -176,3 +176,19 @@ Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "meta
 - **Autoplay de la página:** YouTube Music carga un tema relacionado por su cuenta cerca del final, sin pasar por la API pública ni por `ended`. Un vigilante dentro de la página (`GUARD_SCRIPT` en `ytmusic/player.ts`) pausa en milisegundos cualquier video que la app no pidió, y la app sigue con su cola. Ese tema ajeno no se muestra en el reproductor.
 - **Radio:** al terminar la lista (sin repeat) la app arma la radio del último tema con `getUpNext` de youtubei.js, la agrega a la playlist de Winamp con título, artista y duración (álbum "Radio · tema") y avisa con un aviso. Se precarga mientras suena el último tema, para que no haya corte. Se puede desactivar en *Ver → Seguir con radio al terminar la lista* (`autoRadio`, activado por defecto). Con la radio desactivada, al terminar la lista queda el último tema detenido.
 - **Radio a pedido:** *Ver → Iniciar radio de la canción actual* y el evento de documento `radio:start` (`detail: { trackId }`, o sin `detail` para la canción actual) reemplazan la playlist por la radio del tema, con el tema primero.
+
+## Likes y listas (YouTube Music)
+
+En el buscador ("Agregar desde YouTube Music") y en la Media Library, con la sesión iniciada:
+
+- **Corazón** en temas, álbumes y playlists (guardar o quitar de tu biblioteca) y en artistas (seguir o dejar de seguir). El estado se marca al instante y se confirma con YouTube; si falla, vuelve atrás.
+- **Botón `≡`** de cada fila ("Agregar a playlist…"): abre un selector con tus playlists propias y "Nueva playlist…". En álbumes, playlists y artistas agrega todos sus temas. No agrega dos veces un tema que la playlist ya tiene.
+- Sigue la cuenta (canal) elegida en *Cuenta → Cambiar de cuenta…*.
+
+Cómo funciona y por qué:
+
+- **Me gusta de temas:** `youtubei.js` manda `like/like` con el cliente TV y YouTube contesta 400, así que el corazón de los temas fallaba. Ahora se envía con el cliente de YouTube Music (`catalog.ts`, `rate()`). Lo mismo para guardar álbumes y playlists (los álbumes se guardan por su playlist de audio `OLAK5uy…`) y para seguir artistas (`/subscription/subscribe`, que con el cliente web se acepta pero no hace nada).
+- **Estado guardado:** `getSaved()` lee tus álbumes y playlists. La biblioteca de YouTube viene paginada (unos 20 por página): antes solo se leía la primera página, y ahora se siguen todas.
+- **Artistas:** la lista "Artistas" de la biblioteca no es la de los artistas que seguís, así que el estado de seguir se consulta por artista (`getFollowing`) y solo para los que se ven en los resultados. En la lista de artistas de la biblioteca no hay corazón.
+- Los artistas de la biblioteca no traían `id` (solo `MPLA<canal>`); ahora se muestran (antes la lista salía vacía).
+- **Playlists propias:** salen de `playlist/get_add_to_playlist`, la misma lista que "Guardar en playlist" de music.youtube.com (excluye las que guardaste de otras personas y "Música que me gusta").

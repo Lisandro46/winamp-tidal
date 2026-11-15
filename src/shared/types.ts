@@ -104,6 +104,12 @@ export interface YtAccounts {
   accounts: YtAccount[]
 }
 
+/** One of the user's own playlists, as offered by "Agregar a playlist…". */
+export interface PlaylistChoice {
+  id: string
+  name: string
+}
+
 export interface AppSettings {
   /** YouTube Music: the chosen account (channel) id; unset follows the one active on music.youtube.com. */
   ytAccount?: string
@@ -201,6 +207,17 @@ export interface RemoteApi {
   search(query: string): Promise<SearchResults>
   setLiked(trackId: string, liked: boolean): Promise<void>
   getLikedIds(): Promise<string[]>
+  /** Keys ("album:<id>") of the albums and playlists saved in the user's library (artists: see getFollowing). */
+  getSaved(): Promise<string[]>
+  /** Which of these artists (ids) the user follows; checked per artist, so ask only for those on screen. */
+  getFollowing(artistIds: string[]): Promise<string[]>
+  /** Saves/removes an album or playlist, or follows/unfollows an artist. */
+  setSaved(collection: Collection, saved: boolean): Promise<void>
+  /** The user's own playlists that tracks can be added to. */
+  getEditablePlaylists(trackIds: string[]): Promise<PlaylistChoice[]>
+  /** Resolves to how many of the tracks were new to the playlist (the others were already in it). */
+  addToPlaylist(playlistId: string, trackIds: string[]): Promise<number>
+  createPlaylist(name: string, trackIds: string[]): Promise<PlaylistChoice>
 
   playTrack(context: PlayContext): Promise<void>
   /** Keeps the app's queue in sync with the Winamp playlist. */
