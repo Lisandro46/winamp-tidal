@@ -61,7 +61,14 @@ function createWindow(): void {
   const window = new BrowserWindow({
     ...desktopBounds(),
     ...(isMac
-      ? { backgroundColor: '#0b0b14', minWidth: 1100, minHeight: 700 }
+      ? {
+          backgroundColor: '#00000000',
+          vibrancy: 'under-window',
+          visualEffectState: 'active',
+          titleBarStyle: 'hiddenInset',
+          minWidth: 1100,
+          minHeight: 700
+        }
       : {
           frame: false,
           transparent: true,

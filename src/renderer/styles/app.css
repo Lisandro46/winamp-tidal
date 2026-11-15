@@ -594,3 +594,17 @@ button:disabled {
   font-family: monospace;
   font-size: 10px;
 }
+
+/* macOS: translucent window (vibrancy) with an inset title bar. */
+body.mac {
+  background: rgba(8, 8, 18, 0.55);
+}
+#mac-drag {
+  position: fixed;
+  top: 0;
+  left: 80px;
+  right: 0;
+  height: 28px;
+  z-index: 5;
+  -webkit-app-region: drag;
+}
