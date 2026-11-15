@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { AuthInfo, Collection, EqState, PlayContext, ProviderId, TidalCredentials, Track, YtAccounts } from '@shared/types'
+import type { AuthInfo, Collection, EqState, PlayContext, PlayMode, ProviderId, TidalCredentials, Track, YtAccounts } from '@shared/types'
 import { cancelBrowserLogin, onLoginProgress } from './auth/browserCookies'
 import { settingsStore } from './auth/store'
 import { setAccountLabel } from './menu'
@@ -25,7 +25,11 @@ export function registerIpc(window: BrowserWindow): () => void {
   // TIDAL is driven through the Windows-only SMTC helper; elsewhere only YouTube Music is offered.
   const tidalSupported = process.platform === 'win32'
   const initialProvider: ProviderId = tidalSupported ? (settingsStore.get().provider ?? 'tidal') : 'ytmusic'
-  let provider: MusicProvider = createProvider(initialProvider, onLiked)
+  const adopt = (created: MusicProvider): MusicProvider => {
+    created.queueAdded = (added) => send('remote:queueAdd', added)
+    return created
+  }
+  let provider: MusicProvider = adopt(createProvider(initialProvider, onLiked))
 
   const auth = (): AuthInfo => ({
     provider: provider.id,
@@ -112,7 +116,7 @@ export function registerIpc(window: BrowserWindow): () => void {
     if (id !== provider.id) {
       const previous = provider
       stopWatching()
-      provider = createProvider(id, onLiked)
+      provider = adopt(createProvider(id, onLiked))
       await previous.dispose().catch(() => undefined)
       watchState()
       void provider.loadLiked().catch(() => undefined)
@@ -139,6 +143,11 @@ export function registerIpc(window: BrowserWindow): () => void {
 
   handle('playTrack', (context: PlayContext) => provider.playTrack(context))
   handle('setQueue', (tracks: Track[]) => provider.setQueue(tracks))
+  handle('setPlayMode', (mode: PlayMode) => provider.setPlayMode?.(mode))
+  handle('startRadio', async (trackId?: string) => {
+    if (!provider.startRadio) throw new Error('Este servicio no tiene radio')
+    return provider.startRadio(trackId)
+  })
   handle('resume', () => provider.resume())
   handle('pause', () => provider.pause())
   handle('next', () => provider.next())

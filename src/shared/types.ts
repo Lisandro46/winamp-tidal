@@ -115,6 +115,21 @@ export interface AppSettings {
   scale?: number
   /** The first-run setup was answered (service, and for TIDAL catalog or remote-only). */
   setupDone?: boolean
+  /** YouTube Music: when the list ends, keep going with a radio of the last song (default on). */
+  autoRadio?: boolean
+}
+
+/** Winamp's SHUF and REP buttons; the app's queue (not the service) decides the order. */
+export interface PlayMode {
+  shuffle: boolean
+  /** Repeat the whole list when it ends. */
+  repeat: boolean
+}
+
+/** Tracks the app appended to the queue by itself (the radio after the list ended). */
+export interface QueueAdd {
+  tracks: Track[]
+  message: string
 }
 
 /** The user's own TIDAL developer app (developer.tidal.com). */
@@ -190,6 +205,10 @@ export interface RemoteApi {
   playTrack(context: PlayContext): Promise<void>
   /** Keeps the app's queue in sync with the Winamp playlist. */
   setQueue(tracks: Track[]): Promise<void>
+  /** Shuffle / repeat as set on the Winamp buttons. */
+  setPlayMode(mode: PlayMode): Promise<void>
+  /** YouTube Music radio (mix) of a song; the current one when no id is given. The seed comes first. */
+  startRadio(trackId?: string): Promise<Track[]>
   resume(): Promise<void>
   pause(): Promise<void>
   next(): Promise<void>
@@ -209,6 +228,8 @@ export interface RemoteApi {
   onPcm(callback: (chunk: PcmChunk) => void): () => void
   onLiked(callback: (ids: string[]) => void): () => void
   onError(callback: (message: string) => void): () => void
+  /** The app added tracks to the queue on its own (radio); append them to the Winamp playlist. */
+  onQueueAdd(callback: (added: QueueAdd) => void): () => void
   onProvider(callback: (auth: AuthInfo) => void): () => void
 
   windowControl(action: 'minimize' | 'close'): void

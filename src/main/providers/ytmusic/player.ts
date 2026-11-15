@@ -31,6 +31,8 @@ export interface YtStatus {
   durationMs: number
   /** An ad is playing instead of the track. */
   ad: boolean
+  /** The media element reached its end (reliable even when the page's own end handling is blocked). */
+  ended: boolean
 }
 
 /** Runs inside the page (main world), where the player's methods live. */
@@ -45,8 +47,29 @@ const STATUS_SCRIPT = `(() => {
     state: p.getPlayerState(),
     positionMs: Math.round((p.getCurrentTime() || 0) * 1000),
     durationMs: Math.round((p.getDuration() || 0) * 1000),
-    ad: p.classList.contains('ad-showing')
+    ad: p.classList.contains('ad-showing'),
+    ended: !!(document.querySelector('video') || {}).ended
   }
+})()`
+
+/**
+ * YouTube Music decides by itself what plays after a song (its "autoplay" of related songs), without
+ * going through the public player API. The app owns the queue, so this guard lives in the page:
+ * it stops the media element's `ended` event from reaching the page's handlers and pauses, within
+ * a few milliseconds, any video other than the one the app asked for (`window.__wrWant`). The app
+ * notices the change by polling and carries on with its own queue.
+ */
+const GUARD_SCRIPT = `(() => {
+  if (window.__wrGuard) return
+  window.__wrGuard = true
+  window.addEventListener('ended', (e) => { if (e.target instanceof HTMLMediaElement) e.stopImmediatePropagation() }, true)
+  setInterval(() => {
+    const p = document.querySelector('#movie_player')
+    const want = window.__wrWant
+    if (!p || !want || typeof p.getVideoData !== 'function') return
+    const id = (p.getVideoData() || {}).video_id
+    if (id && id !== want && !p.classList.contains('ad-showing') && p.getPlayerState() !== 2) p.pauseVideo()
+  }, 50)
 })()`
 
 /** A regular Chrome user agent, without the "Electron/…" token. */
@@ -155,6 +178,7 @@ export class YtPlayerWindow {
         const until = Date.now() + READY_TIMEOUT_MS
         while (Date.now() < until) {
           if (await this.run<boolean>(`!!document.querySelector('#movie_player')`).catch(() => false)) {
+            await this.run(GUARD_SCRIPT).catch(() => undefined)
             await pageAudio.inject()
             return
           }
@@ -179,7 +203,23 @@ export class YtPlayerWindow {
     await this.run(`document.querySelector('#movie_player').${call}`)
   }
 
-  load = (videoId: string): Promise<void> => this.player(`loadVideoById(${JSON.stringify(videoId)})`)
+  /** Starts a video; the guard now expects exactly this one (anything else the page loads is paused). */
+  async load(videoId: string): Promise<void> {
+    await this.ensure()
+    const id = JSON.stringify(videoId)
+    await this.run(`window.__wrWant = ${id}; document.querySelector('#movie_player').loadVideoById(${id})`)
+  }
+  /** Shows a video stopped at 0:00 (the list is over and nothing continues). */
+  async cue(videoId: string): Promise<void> {
+    await this.ensure()
+    const id = JSON.stringify(videoId)
+    await this.run(`window.__wrWant = ${id}; document.querySelector('#movie_player').cueVideoById(${id})`)
+  }
+  /** The player reports another id for what we asked (alternate version): accept that one. */
+  async expect(videoId: string): Promise<void> {
+    await this.ensure()
+    await this.run(`window.__wrWant = ${JSON.stringify(videoId)}`)
+  }
   play = (): Promise<void> => this.player('playVideo()')
   pause = (): Promise<void> => this.player('pauseVideo()')
   seek = (positionMs: number): Promise<void> => this.player(`seekTo(${positionMs / 1000}, true)`)

@@ -107,6 +107,14 @@ async function main(): Promise<void> {
   window.remote.onVolume((volume) => controller.applyVolume(volume))
   window.remote.onPcm((chunk) => getRemoteMedia()?.feedPcm(chunk))
   window.remote.onError((message) => showToast(message))
+  // The app continued with a radio on its own: show those songs in the Winamp playlist too.
+  window.remote.onQueueAdd(({ tracks, message }) => {
+    if (tracks.length) controller.enqueue(tracks)
+    showToast(message)
+  })
+  document.addEventListener('radio:start', (event) => {
+    void controller.startRadio((event as CustomEvent<{ trackId?: string } | null>).detail?.trackId)
+  })
 
   if (!fit) trackPointer()
   // The window spans every monitor; start the UI on the primary one.

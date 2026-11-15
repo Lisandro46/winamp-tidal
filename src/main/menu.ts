@@ -1,4 +1,5 @@
 import { app, Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
+import { settingsStore } from './auth/store'
 
 /**
  * Native macOS menu bar. Items just fire the same DOM events the in-page UI uses,
@@ -56,6 +57,14 @@ function build(window: BrowserWindow): void {
         item('Buscar en YouTube Music… (J)', 'search:open'),
         item('Skins…', 'skins:open'),
         item('Milkdrop', 'milkdrop:toggle'),
+        { type: 'separator' },
+        item('Iniciar radio de la canción actual', 'radio:start'),
+        {
+          label: 'Seguir con radio al terminar la lista',
+          type: 'checkbox',
+          checked: settingsStore.get().autoRadio !== false,
+          click: (menuItem) => settingsStore.update({ autoRadio: menuItem.checked })
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]

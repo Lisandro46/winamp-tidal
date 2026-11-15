@@ -167,3 +167,12 @@ Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "meta
 ### Documentación
 
 - Actualizar el `README.md` con los cambios del port a macOS (instalación, permisos, diferencias con Windows) para poder abrir un Pull Request al repositorio original y dejar documentado lo hecho.
+
+## Cola, shuffle, repeat y radio (YouTube Music)
+
+- **Quién manda:** la cola de la app. `src/main/providers/playOrder.ts` decide el siguiente tema y el anterior; el autoplay de la página de YouTube Music nunca decide.
+- **Shuffle (SHUF):** orden aleatorio sin repetir un tema hasta haber pasado todos (una "ronda"). **Repeat (REP):** al terminar la lista vuelve al principio (la lista completa, como Winamp). **Anterior** recorre lo que realmente sonó, también en shuffle. El renderer lee `media.shuffle` y `media.repeat` del store de Webamp y los manda con `setPlayMode`.
+- **Siguiente errático:** los avances (siguiente, anterior, fin de tema) ahora van en serie y no se pisan; el fin de un tema se atiende una sola vez y ya no depende de la posición en la lista.
+- **Autoplay de la página:** YouTube Music carga un tema relacionado por su cuenta cerca del final, sin pasar por la API pública ni por `ended`. Un vigilante dentro de la página (`GUARD_SCRIPT` en `ytmusic/player.ts`) pausa en milisegundos cualquier video que la app no pidió, y la app sigue con su cola. Ese tema ajeno no se muestra en el reproductor.
+- **Radio:** al terminar la lista (sin repeat) la app arma la radio del último tema con `getUpNext` de youtubei.js, la agrega a la playlist de Winamp con título, artista y duración (álbum "Radio · tema") y avisa con un aviso. Se precarga mientras suena el último tema, para que no haya corte. Se puede desactivar en *Ver → Seguir con radio al terminar la lista* (`autoRadio`, activado por defecto). Con la radio desactivada, al terminar la lista queda el último tema detenido.
+- **Radio a pedido:** *Ver → Iniciar radio de la canción actual* y el evento de documento `radio:start` (`detail: { trackId }`, o sin `detail` para la canción actual) reemplazan la playlist por la radio del tema, con el tema primero.

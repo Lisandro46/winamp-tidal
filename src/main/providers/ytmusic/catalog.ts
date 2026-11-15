@@ -32,6 +32,16 @@ interface Item {
   flex_columns?: { title?: Text }[]
 }
 
+/** A node of the "up next" panel (a song, or a wrapper around one). */
+interface RadioNode {
+  primary?: RadioNode | null
+  video_id?: string
+  title?: string | Text
+  artists?: { name: string }[]
+  author?: string
+  duration?: { seconds?: number }
+}
+
 const MAX_PLAYLIST_PAGES = 10
 /** Home page sections to look through for the user's mixes. */
 const HOME_PAGES = 4
@@ -133,6 +143,32 @@ export class YtCatalog {
       this.client = client
     }
     return this.client
+  }
+
+  /**
+   * The radio (mix) YouTube Music builds from a song: what its "up next" and "start radio" show.
+   * The seed song comes first. Works without an account.
+   */
+  async radio(videoId: string, label?: string): Promise<Track[]> {
+    const yt = await this.yt()
+    const panel = (await yt.music.getUpNext(videoId, true)) as unknown as { contents?: RadioNode[] }
+    const seen = new Set<string>()
+    const tracks: Track[] = []
+    for (const node of panel.contents ?? []) {
+      const video = node.primary ?? node
+      const id = video.video_id
+      if (!id || id.length !== 11 || seen.has(id)) continue
+      seen.add(id)
+      tracks.push({
+        id,
+        title: text(video.title),
+        artist: video.artists?.map((a) => a.name).join(', ') || video.author || '',
+        durationMs: (video.duration?.seconds ?? 0) * 1000
+      })
+    }
+    // The album slot says where these songs came from.
+    const tag = label ?? `Radio · ${tracks[0]?.title ?? ''}`.trim()
+    return tracks.map((t) => ({ ...t, album: tag }))
   }
 
   private ensureLogin(): void {

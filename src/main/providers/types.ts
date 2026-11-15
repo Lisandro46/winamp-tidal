@@ -1,9 +1,11 @@
 import type {
   Collection,
   PlayContext,
+  PlayMode,
   PlaybackState,
   ProviderCapabilities,
   ProviderId,
+  QueueAdd,
   SearchResults,
   Track,
   YtAccounts
@@ -52,6 +54,12 @@ export interface MusicProvider {
   playTrack(context: PlayContext): Promise<void>
   /** The Winamp playlist changed (tracks added, removed or reordered). */
   setQueue(tracks: Track[]): void
+  /** Shuffle / repeat buttons (YouTube Music; TIDAL decides its own order). */
+  setPlayMode?(mode: PlayMode): void
+  /** A radio (mix) built from a song, the current one when no id is given. */
+  startRadio?(trackId?: string): Promise<Track[]>
+  /** Set by the host: the provider appended tracks to its queue by itself (radio). */
+  queueAdded?: (added: QueueAdd) => void
   resume(): Promise<void>
   pause(): Promise<void>
   next(): Promise<void>

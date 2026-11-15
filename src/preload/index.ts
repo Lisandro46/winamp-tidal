@@ -41,6 +41,8 @@ const methods = [
   'getLikedIds',
   'playTrack',
   'setQueue',
+  'setPlayMode',
+  'startRadio',
   'resume',
   'pause',
   'next',
@@ -53,7 +55,7 @@ const methods = [
   'openVisualizer'
 ] as const
 
-const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onProvider: 'provider', onLoginStatus: 'loginStatus' } as const
+const events = { onState: 'state', onVolume: 'volume', onPcm: 'pcm', onLiked: 'liked', onError: 'error', onQueueAdd: 'queueAdd', onProvider: 'provider', onLoginStatus: 'loginStatus' } as const
 
 const api = {
   platform: process.platform,
