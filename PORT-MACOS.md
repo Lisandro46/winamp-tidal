@@ -87,14 +87,14 @@ npm run dist:mac       # genera dist/*.dmg
 xattr -cr "/Applications/Winamp Remote.app"   # la app no está firmada
 ```
 Checklist:
-- [ ] Busca y reproduce sin cuenta
-- [ ] Login con Google y biblioteca (favoritos, playlists, mixes)
-- [ ] Play / pausa / siguiente / anterior / seek desde Webamp
-- [ ] Volumen de Webamp cambia el audio
-- [ ] Las 10 bandas del EQ se escuchan; preamp funciona; se mantiene al cambiar de tema
-- [ ] Visualizador de Webamp y Milkdrop se mueven con la música
-- [ ] Skins del Winamp Skin Museum cargan
-- [ ] Teclas multimedia del teclado (ver paso 7)
+- [x] Busca y reproduce sin cuenta
+- [x] Login con Google y biblioteca (favoritos, playlists, mixes)
+- [x] Play / pausa / siguiente / anterior / seek desde Webamp
+- [x] Volumen de Webamp cambia el audio
+- [x] Las 10 bandas del EQ se escuchan; preamp funciona; se mantiene al cambiar de tema
+- [x] Visualizador de Webamp y Milkdrop se mueven con la música
+- [x] Skins del Winamp Skin Museum cargan
+- [x] Teclas multimedia del teclado (ver paso 7)
 
 ### Paso 7 — Teclas multimedia y noTunes (opcional)
 > Registrá `globalShortcut` para `MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack` (en Mac requiere
