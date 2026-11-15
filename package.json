@@ -13,7 +13,7 @@
     "publish:helper": "dotnet publish native/smtc-helper -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o build/smtc-helper --nologo -v q",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "npm run publish:helper && npm run build && electron-builder --win --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --arm64 --publish never"
+    "dist:mac": "npm run build && electron-builder --mac --arm64 --publish never -c.productName=\"Winamp Remote\""
   },
   "build": {
     "appId": "com.lisandro.winamp-remote",
