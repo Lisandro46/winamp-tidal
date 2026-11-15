@@ -135,8 +135,9 @@ Ya resuelto y probado en una Mac instalada:
 
 Con el foco en el buscador de la biblioteca, escribir una `L` (por ejemplo "metallica") oculta la Winamp Media Library.
 
-- Causa probable: el listener de `keydown` en `src/renderer/webamp/controller.ts` ignora `input, textarea, #library`, pero la comprobación usa `event.target` y no cubre el caso de foco dentro de la biblioteca o de sus diálogos.
-- Esperado: `L` (y también `J`, `B`, `Z`) no deben actuar como atajos cuando el foco está en un campo de texto de cualquier panel.
+- Causa: el menú nativo que agregué en `src/main/menu.ts` declara los ítems de Ver con acelerador `L` y `J` sin modificador. `registerAccelerator: false` solo aplica en Windows y Linux; en macOS el menú intercepta la letra antes de que llegue a la página, así que se cierra la biblioteca incluso con el foco en el buscador. El guard de `controller.ts` (`closest('input, textarea, #library')`) ya es correcto.
+- Arreglo previsto: quitar `accelerator` de esos ítems (dejar el atajo solo como texto en la etiqueta, por ejemplo "Mostrar/ocultar Biblioteca (L)") o usar un acelerador con modificador.
+- Esperado: `L` y `J` no deben actuar como atajos cuando el foco está en un campo de texto de cualquier panel.
 
 ### Cuentas de YouTube Music
 
