@@ -1,4 +1,5 @@
 import type { Collection, PlayContext, PlaybackState, SearchResults, Track } from '@shared/types'
+import { pageAudio } from '../../platform/pageAudio'
 import type { MusicProvider } from '../types'
 import { YtCatalog } from './catalog'
 import { YtPlayerWindow, YtState, type YtStatus } from './player'
@@ -25,6 +26,10 @@ export class YtMusicProvider implements MusicProvider {
   private lastStatus: YtStatus | null = null
   /** The video we asked for, until the player reports it. */
   private loading: string | undefined
+  /** macOS: media keys / Now Playing next and previous go through our queue (no-op elsewhere). */
+  private readonly offMedia = pageAudio.onMediaAction((action) =>
+    void (action === 'next' ? this.next() : this.previous()).catch(() => undefined)
+  )
 
   constructor(private readonly onLikedChange: (ids: string[]) => void) {
     void this.refreshCookie()
@@ -197,6 +202,7 @@ export class YtMusicProvider implements MusicProvider {
   }
 
   async dispose(): Promise<void> {
+    this.offMedia()
     this.window.dispose()
   }
 }

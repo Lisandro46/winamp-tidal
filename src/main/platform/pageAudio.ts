@@ -124,6 +124,31 @@ const GRAPH_SCRIPT = `(() => {
   return true
 })()`
 
+/** Next/previous from the media keys or Now Playing, handled by the app's own queue. */
+export type MediaAction = 'next' | 'previous'
+
+/**
+ * Runs in the main world of music.youtube.com. Chromium already publishes the
+ * page's `navigator.mediaSession` to macOS (media keys, Control Center's
+ * Now Playing) and YouTube Music fills its metadata and play/pause handlers;
+ * play/pause act on the <video> directly and the provider's polling picks the
+ * change up. Next/previous would move YouTube Music's own "up next" instead of
+ * the app's queue, so those two handlers are pinned to the bridge, even when
+ * the page sets them again later.
+ */
+const MEDIA_SESSION_SCRIPT = `(() => {
+  const ms = navigator.mediaSession
+  if (!ms || ms.__wrPatched) return
+  const original = ms.setActionHandler.bind(ms)
+  const send = (action) => () => window.__wrBridge && window.__wrBridge.media(action)
+  const ours = { nexttrack: send('next'), previoustrack: send('previous') }
+  ms.setActionHandler = (action, handler) => original(action, ours[action] || handler)
+  for (const action in ours) {
+    try { original(action, ours[action]) } catch (e) {}
+  }
+  ms.__wrPatched = true
+})()`
+
 /**
  * Bridge between the main process and the Web Audio graph injected into the
  * hidden YouTube Music window (macOS backend). Keeps the last volume/EQ/PCM
@@ -144,6 +169,16 @@ class PageAudio extends EventEmitter {
       if (typeof rate !== 'number' || typeof data !== 'string' || data.length > MAX_PCM_BASE64) return
       this.emit('pcm', { rate, data } satisfies PcmChunk)
     })
+    ipcMain.on('ytmusic:media', (event: IpcMainEvent, action: unknown) => {
+      if (event.sender !== this.contents) return
+      if (action === 'next' || action === 'previous') this.emit('media', action satisfies MediaAction)
+    })
+  }
+
+  /** Next/previous requested from the media keys or Now Playing (macOS only). */
+  onMediaAction(listener: (action: MediaAction) => void): () => void {
+    this.on('media', listener)
+    return () => this.off('media', listener)
   }
 
   enable(): void {
@@ -175,7 +210,10 @@ class PageAudio extends EventEmitter {
     if (!this.enabled || !contents || contents.isDestroyed()) return
     try {
       const installed = await contents.executeJavaScript(GRAPH_SCRIPT, true)
-      if (installed) await this.push()
+      if (installed) {
+        await contents.executeJavaScript(MEDIA_SESSION_SCRIPT, true)
+        await this.push()
+      }
     } catch (error) {
       console.warn('[pageAudio] inject failed', error)
     }
